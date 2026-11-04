@@ -1,0 +1,745 @@
+<!DOCTYPE html>
+<html lang="fr" class="dark h-full">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="theme-color" content="#090A0F" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <title>PCSI.OS</title>
+  <meta name="apple-mobile-web-app-title" content="PCSI.OS" />
+  <link rel="icon" type="image/png" href="icon-192.png" />
+  <link rel="apple-touch-icon" href="icon-180.png" />
+  <link rel="manifest" href="manifest.webmanifest" />
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/@phosphor-icons/web"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+  <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&family=Caveat:wght@600;700&family=Oxanium:wght@500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/base.css" />
+  <link rel="stylesheet" href="css/layout.css" />
+  <link rel="stylesheet" href="css/components.css" />
+  <link rel="stylesheet" href="css/overrides.css" />
+</head>
+<body>
+
+  <div class="ambient-glow"></div>
+
+  <div id="app-shell" class="app-shell">
+
+    <!-- LEFT SIDEBAR -->
+    <aside class="sidebar">
+      <div style="width:100%;">
+        <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:22px; padding:0 4px;">
+          <div style="display:flex; align-items:center; gap:10px;" class="hide-collapsed">
+            <img src="logo-ens.png" alt="ENS" class="brand-logo" onerror="this.style.display='none';" />
+            <div>
+              <div class="brand-name">PCSI<span>.OS</span></div>
+              <div class="mono" style="font-size:10px; color:var(--text-subtle);">COCKPIT PRÉPA</div>
+            </div>
+          </div>
+          <button type="button" onclick="window.toggleSidebar()" class="btn-ghost" style="padding:6px 8px; border-color:transparent;" title="Réduire / Agrandir">
+            <i class="ph ph-sidebar-simple text-base"></i>
+          </button>
+        </div>
+
+        <div style="margin-bottom:18px;" class="hide-collapsed">
+          <button type="button" onclick="window.openMissionModal(null)" class="btn-primary" style="width:100%;">
+            <i class="ph-bold ph-plus"></i>
+            <span>Nouvelle mission</span>
+          </button>
+        </div>
+
+        <nav style="display:flex; flex-direction:column; gap:3px;">
+          <button type="button" id="nav-cahier" onclick="window.switchTab('cahier')" class="nav-item active" title="Missions">
+            <i class="ph ph-check-square-offset text-base"></i>
+            <span class="hide-collapsed">Missions</span>
+          </button>
+          <button type="button" id="nav-agenda" onclick="window.switchTab('agenda')" class="nav-item" title="Emploi du temps">
+            <i class="ph ph-calendar-blank text-base"></i>
+            <span class="hide-collapsed">Emploi du temps</span>
+          </button>
+          <button type="button" id="nav-postits" onclick="window.switchTab('postits')" class="nav-item" title="Mur d'erreurs">
+            <i class="ph ph-note text-base"></i>
+            <span class="hide-collapsed">Mur d'erreurs</span>
+          </button>
+          <button type="button" id="nav-sites" onclick="window.switchTab('sites')" class="nav-item" title="Sites &amp; Liens">
+            <i class="ph ph-squares-four text-base"></i>
+            <span class="hide-collapsed">Sites &amp; Liens</span>
+          </button>
+        </nav>
+      </div>
+
+      <div class="hide-collapsed" style="border-top:1px solid var(--border-subtle); padding-top:14px; width:100%;">
+        <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:6px; padding:0 8px;">
+          <span style="font-size:10.5px; font-weight:700; color:var(--text-subtle); text-transform:uppercase; letter-spacing:0.04em;">Portails CPGE</span>
+          <button type="button" onclick="window.openPortalModal(null)" class="btn-ghost" style="padding:2px 6px; font-size:11px; border:none;" title="Ajouter un lien">
+            <i class="ph-bold ph-plus"></i>
+          </button>
+        </div>
+        
+        <!-- LIENS DYNAMIQUES ICI -->
+        <div id="sidebar-portals-mount" style="display:flex; flex-direction:column; gap:2px; margin-bottom:14px;"></div>
+
+        <div style="display:flex; align-items:center; justify-content:space-between; background:rgba(255,255,255,0.025); padding:8px 10px; border-radius:10px; border:1px solid var(--border-subtle);">
+          <div style="display:flex; align-items:center; gap:7px;">
+            <span id="sync-dot" class="sync-dot sync-pending"></span>
+            <span id="sync-label" class="mono" style="font-size:11px; color:var(--text-muted);">Mode Local</span>
+          </div>
+          <div style="display:flex; gap:4px;">
+            <button type="button" onclick="window.syncNowSupabase()" class="btn-ghost" style="padding:4px 6px; border:none;" title="Synchroniser">
+              <i class="ph ph-arrows-clockwise"></i>
+            </button>
+            <button type="button" onclick="window.openSupabaseModal()" class="btn-ghost" style="padding:4px 6px; border:none;" title="Connexion Cloud">
+              <i class="ph ph-gear-six"></i>
+            </button>
+          </div>
+        </div>
+      </div>
+    </aside>
+
+    <!-- MAIN WORKSPACE -->
+    <main class="workspace">
+      <header style="display:flex; justify-content:space-between; align-items:center; margin-bottom:24px; padding-bottom:16px; border-bottom:1px solid var(--border-subtle); gap:12px; flex-wrap:wrap;">
+        <div style="display:flex; align-items:center; gap:12px; min-width:0;">
+          <img src="logo-ens.png" alt="ENS" class="header-logo only-mobile" onerror="this.style.display='none';" />
+          <div style="min-width:0;">
+            <div class="brand-name only-mobile" style="font-size:11.5px; margin-bottom:3px;">PCSI<span>.OS</span></div>
+            <h1 id="view-title" style="font-size:20px; font-weight:700; letter-spacing:-0.02em;">Missions &amp; Cahier de Texte</h1>
+            <p id="view-subtitle" style="font-size:12.5px; color:var(--text-muted);">Priorisation dynamique selon l'échéance et la charge de travail</p>
+          </div>
+        </div>
+        <div style="display:flex; align-items:center; gap:8px;">
+          <button type="button" id="header-refresh-btn" onclick="window.syncNowSupabase({ forceFetch: true })" class="btn-ghost" title="Actualiser et synchroniser avec Supabase">
+            <i class="ph ph-arrows-clockwise text-base" id="header-refresh-ico"></i> <span class="hide-mobile">Actualiser</span>
+          </button>
+          <button type="button" onclick="window.openResetModal()" class="btn-ghost hide-mobile" title="Vider ou réinitialiser">
+            <i class="ph ph-broom"></i> <span>Vider / Reset</span>
+          </button>
+          <button type="button" onclick="window.openSupabaseModal()" class="btn-ghost" title="Synchronisation Cloud">
+            <i class="ph ph-cloud-arrow-up"></i> <span class="hide-mobile">Cloud Sync</span> <span class="sync-dot sync-pending"></span>
+          </button>
+          <button type="button" onclick="window.exportJSON()" class="btn-ghost hide-mobile" title="Exporter JSON">
+            <i class="ph ph-download-simple"></i>
+          </button>
+          <button type="button" onclick="document.getElementById('import-file').click()" class="btn-ghost hide-mobile" title="Importer JSON">
+            <i class="ph ph-upload-simple"></i>
+          </button>
+          <input type="file" id="import-file" accept=".json" style="display:none;" onchange="window.importJSON(event)" />
+        </div>
+      </header>
+
+      <!-- TAB 1 : MISSIONS -->
+      <section id="tab-cahier" class="tab-view">
+        <div class="kpi-row" style="display:grid; grid-template-columns:repeat(auto-fit, minmax(210px, 1fr)); gap:14px; margin-bottom:20px;">
+          <div class="saas-card" style="padding:16px 18px;">
+            <div style="font-size:11px; font-weight:600; color:var(--text-subtle); text-transform:uppercase; margin-bottom:6px;">Urgences Critiques</div>
+            <div style="display:flex; align-items:baseline; justify-content:space-between;">
+              <span id="kpi-urgent" class="mono" style="font-size:24px; font-weight:700;">0</span>
+              <span style="font-size:11.5px; color:var(--text-muted);">Pression haute</span>
+            </div>
+          </div>
+          <div class="saas-card" style="padding:16px 18px;">
+            <div style="font-size:11px; font-weight:600; color:var(--text-subtle); text-transform:uppercase; margin-bottom:6px;">Charge Restante</div>
+            <div style="display:flex; align-items:baseline; justify-content:space-between;">
+              <span id="kpi-hours" class="mono" style="font-size:24px; font-weight:700;">0h</span>
+              <span style="font-size:11.5px; color:var(--text-muted);">Volume estimé</span>
+            </div>
+          </div>
+          <div class="saas-card" style="padding:16px 18px;">
+            <div style="font-size:11px; font-weight:600; color:var(--text-subtle); text-transform:uppercase; margin-bottom:6px;">Taux d'Avancement</div>
+            <div style="display:flex; align-items:baseline; justify-content:space-between;">
+              <span id="kpi-ratio" class="mono" style="font-size:24px; font-weight:700;">0%</span>
+              <span id="kpi-ratio-sub" style="font-size:11.5px; color:var(--text-muted);">0/0 validées</span>
+            </div>
+          </div>
+        </div>
+
+        <form onsubmit="window.quickAddMission(event)" class="saas-card qa-form" style="padding:12px 14px; margin-bottom:16px; display:flex; flex-wrap:wrap; align-items:center; gap:10px;">
+          <input type="text" id="qa-title" class="saas-input" style="flex:1; min-width:200px;" placeholder="Ajout rapide : DM, TD, Préparation colle..." required />
+          <div id="qa-subject-select" style="width:155px;"></div>
+          <label class="qa-field qa-dur"><span class="qa-lbl">Durée (h)</span>
+            <input type="number" id="qa-duration" class="saas-input mono" style="width:88px;" placeholder="1.5h" step="0.5" min="0.5" value="1.5" />
+          </label>
+          <label class="qa-field qa-date"><span class="qa-lbl">Échéance</span>
+            <input type="date" id="qa-duedate" class="saas-input mono" style="width:142px;" />
+          </label>
+          <button type="submit" class="btn-primary">
+            <i class="ph-bold ph-plus"></i> Ajouter
+          </button>
+        </form>
+
+        <div style="display:flex; flex-wrap:wrap; justify-content:space-between; align-items:center; gap:12px; margin-bottom:16px;">
+          <div id="subject-filters" style="display:flex; flex-wrap:wrap; gap:6px;"></div>
+          <div style="display:flex; gap:4px; background:rgba(255,255,255,0.03); padding:3px; border-radius:10px; border:1px solid var(--border-subtle);">
+            <button type="button" onclick="window.setCahierMode('table')" id="mode-table-btn" class="btn-ghost" style="padding:5px 11px; font-size:12px; border:none;">
+              <i class="ph ph-list-bullets"></i> Liste
+            </button>
+            <button type="button" onclick="window.setCahierMode('kanban')" id="mode-kanban-btn" class="btn-ghost" style="padding:5px 11px; font-size:12px; border:none;">
+              <i class="ph ph-kanban"></i> Kanban
+            </button>
+          </div>
+        </div>
+
+        <div id="tasks-render-area"></div>
+      </section>
+
+      <!-- TAB 2 : AGENDA -->
+      <section id="tab-agenda" class="tab-view" style="display:none;">
+        <div class="saas-card agenda-bar" style="padding:18px 20px; margin-bottom:18px; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:14px;">
+          <div class="agenda-intro">
+            <h2 style="font-size:15.5px; font-weight:700;">Semainier PCSI &amp; Colloscope</h2>
+            <p style="font-size:12px; color:var(--text-muted);">Vue complète de l'année. Les cours se répètent, les colles sont datées.</p>
+          </div>
+          <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+            <div class="week-nav" style="display:flex; align-items:center; background:rgba(255,255,255,0.025); border:1px solid var(--border-subtle); border-radius:10px; padding:3px; margin-right:4px;">
+              <button type="button" onclick="window.prevWeek()" class="btn-ghost" style="padding:5px 8px; border:none;" title="Semaine précédente"><i class="ph-bold ph-caret-left"></i></button>
+              <span id="agenda-week-label" style="font-size:12px; font-weight:600; padding:0 12px; color:var(--text-main); cursor:pointer;" onclick="window.currentWeek()" title="Revenir à aujourd'hui">Semaine du --/--</span>
+              <button type="button" onclick="window.nextWeek()" class="btn-ghost" style="padding:5px 8px; border:none;" title="Semaine suivante"><i class="ph-bold ph-caret-right"></i></button>
+            </div>
+            <button type="button" onclick="window.openSlotModal(null)" class="btn-primary hide-mobile">
+              <i class="ph-bold ph-plus"></i> Ajouter un créneau
+            </button>
+            <button type="button" onclick="window.openScheduleImportModal()" class="btn-ghost hide-mobile">
+              <i class="ph ph-code"></i> Importer
+            </button>
+          </div>
+        </div>
+        <div class="saas-card" style="padding:18px; overflow-x:auto;" id="calendar-grid-box"></div>
+        <div class="agenda-tools mobile-block">
+          <button type="button" onclick="window.openSlotModal(null)" class="btn-primary"><i class="ph-bold ph-plus"></i> Ajouter un créneau</button>
+          <button type="button" onclick="window.openScheduleImportModal()" class="btn-ghost"><i class="ph ph-code"></i> Importer</button>
+        </div>
+      </section>
+
+      <!-- TAB 3 : POST-ITS -->
+      <section id="tab-postits" class="tab-view" style="display:none;">
+        <div class="saas-card" style="padding:18px 20px; margin-bottom:20px; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:14px;">
+          <div>
+            <h2 style="font-size:15.5px; font-weight:700;">Mur d'Erreurs & Pièges Classiques</h2>
+            <p style="font-size:12px; color:var(--text-muted);">Glisse-dépose les post-its pour les réorganiser avant un DS</p>
+          </div>
+          <div style="display:flex; flex-wrap:wrap; gap:8px; align-items:center;">
+            <div id="postit-subj-filter-mount" style="width:165px;"></div>
+            <div id="postit-type-filter-mount" style="width:165px;"></div>
+            <button type="button" onclick="window.openErrorTypesModal()" class="btn-ghost"><i class="ph ph-tag"></i> Gérer types</button>
+            <button type="button" onclick="window.openPostitModal(null)" class="btn-primary"><i class="ph-bold ph-plus"></i> Nouveau post-it</button>
+          </div>
+        </div>
+        <div id="postit-wall" style="display:grid; grid-template-columns:repeat(auto-fill, minmax(225px, 1fr)); gap:24px; padding:10px;"></div>
+      </section>
+
+      <!-- TAB 4 : SITES -->
+      <section id="tab-sites" class="tab-view" style="display:none;">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+          <div class="section-label" style="margin:0;">Portails CPGE</div>
+          <button type="button" onclick="window.openPortalModal(null)" class="btn-primary" style="padding:6px 12px; font-size:12px;">
+            <i class="ph-bold ph-plus"></i> Ajouter un lien
+          </button>
+        </div>
+        
+        <!-- LIENS DYNAMIQUES -->
+        <div id="sites-grid-mount" class="sites-grid"></div>
+
+        <div class="section-label" style="margin-top:28px;">Données &amp; synchronisation</div>
+        <div class="sites-grid">
+          <button type="button" onclick="window.syncNowSupabase()" class="saas-card site-card">
+            <span class="site-ico"><i class="ph ph-arrows-clockwise"></i></span>
+            <span class="site-txt"><b>Synchroniser</b><small>Envoyer / récupérer depuis le cloud</small></span>
+            <span class="sync-dot sync-pending"></span>
+          </button>
+          <button type="button" onclick="window.openSupabaseModal()" class="saas-card site-card">
+            <span class="site-ico"><i class="ph ph-cloud-arrow-up"></i></span>
+            <span class="site-txt"><b>Gérer la connexion</b><small>Changer d'identifiant (Sync ID)</small></span>
+          </button>
+          <button type="button" onclick="window.exportJSON()" class="saas-card site-card">
+            <span class="site-ico"><i class="ph ph-download-simple"></i></span>
+            <span class="site-txt"><b>Exporter en JSON</b><small>Sauvegarde locale complète</small></span>
+          </button>
+          <button type="button" onclick="document.getElementById('import-file').click()" class="saas-card site-card">
+            <span class="site-ico"><i class="ph ph-upload-simple"></i></span>
+            <span class="site-txt"><b>Importer un JSON</b><small>Restaurer une sauvegarde locale</small></span>
+          </button>
+          <button type="button" onclick="window.openOnboardingModal()" class="saas-card site-card">
+            <span class="site-ico"><i class="ph ph-sparkle"></i></span>
+            <span class="site-txt"><b>Revoir le tutoriel</b><small>Présentation rapide du Cockpit</small></span>
+          </button>
+          <button type="button" onclick="window.openResetModal()" class="saas-card site-card" style="color:#F87171;">
+            <span class="site-ico" style="color:#F87171;"><i class="ph ph-broom"></i></span>
+            <span class="site-txt"><b>Vider / Reset</b><small>Nettoyage et remise à zéro</small></span>
+          </button>
+        </div>
+      </section>
+
+    </main>
+  </div>
+
+  <nav class="mobile-nav">
+    <button type="button" onclick="window.switchTab('agenda')" id="mob-nav-agenda" class="nav-item"><i class="ph ph-calendar-blank"></i><span>Agenda</span></button>
+    <button type="button" onclick="window.switchTab('cahier')" id="mob-nav-cahier" class="nav-item"><i class="ph ph-check-square-offset"></i><span>Missions</span></button>
+    <button type="button" onclick="window.switchTab('postits')" id="mob-nav-postits" class="nav-item"><i class="ph ph-note"></i><span>Erreurs</span></button>
+    <button type="button" onclick="window.switchTab('sites')" id="mob-nav-sites" class="nav-item"><i class="ph ph-squares-four"></i><span>Sites</span></button>
+  </nav>
+  <button type="button" class="fab only-mobile" aria-label="Ajouter" onclick="document.body.dataset.tab==='postits' ? window.openPostitModal(null) : window.openMissionModal(null)">
+    <i class="ph-bold ph-plus"></i>
+  </button>
+
+  <!-- ============================================== -->
+  <!-- TOUTES LES MODALES COMPLETES SONT CI-DESSOUS   -->
+  <!-- ============================================== -->
+
+  <!-- MODAL 1 : MISSION -->
+  <div id="mission-modal" class="modal-backdrop">
+    <div class="modal-box">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:18px;">
+        <h3 id="mission-modal-title" style="font-size:15px; font-weight:700;">Nouvelle Mission</h3>
+        <button type="button" onclick="window.closeMissionModal()" class="btn-ghost" style="padding:4px 7px; border:none;"><i class="ph ph-x"></i></button>
+      </div>
+      <form onsubmit="window.saveMissionForm(event)" style="display:flex; flex-direction:column; gap:13px;">
+        <input type="hidden" id="m-id" value="" />
+        <div>
+          <label style="font-size:11.5px; font-weight:600; color:var(--text-muted); display:block; margin-bottom:5px;">Intitulé de la mission *</label>
+          <input type="text" id="m-title" class="saas-input" placeholder="Ex: DM Électrocinétique, TD Chimie..." required />
+        </div>
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px;">
+          <div>
+            <label style="font-size:11.5px; font-weight:600; color:var(--text-muted); display:block; margin-bottom:5px;">Matière</label>
+            <div id="m-subject-mount"></div>
+          </div>
+          <div>
+            <label style="font-size:11.5px; font-weight:600; color:var(--text-muted); display:block; margin-bottom:5px;">Durée estimée (h)</label>
+            <input type="number" id="m-duration" class="saas-input mono" placeholder="2" step="0.5" min="0.5" />
+          </div>
+        </div>
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px;">
+          <div>
+            <label style="font-size:11.5px; font-weight:600; color:var(--text-muted); display:block; margin-bottom:5px;">Jour d'échéance</label>
+            <input type="date" id="m-duedate" class="saas-input mono" />
+          </div>
+          <div>
+            <label style="font-size:11.5px; font-weight:600; color:var(--text-muted); display:block; margin-bottom:5px;">Statut</label>
+            <div id="m-status-mount"></div>
+          </div>
+        </div>
+        <div style="display:flex; flex-wrap:wrap; gap:6px;">
+          <button type="button" onclick="window.setModalQuickDate(0)" class="btn-ghost" style="font-size:11px; padding:4px 8px;">Aujourd'hui</button>
+          <button type="button" onclick="window.setModalQuickDate(1)" class="btn-ghost" style="font-size:11px; padding:4px 8px;">Demain</button>
+          <button type="button" onclick="window.setModalQuickDate(2)" class="btn-ghost" style="font-size:11px; padding:4px 8px;">+2 jours</button>
+          <button type="button" onclick="window.setModalQuickDate(5)" class="btn-ghost" style="font-size:11px; padding:4px 8px;">+5 jours</button>
+        </div>
+        <div>
+          <label style="font-size:11.5px; font-weight:600; color:var(--text-muted); display:block; margin-bottom:5px;">Notes / Détails</label>
+          <textarea id="m-note" class="saas-input" rows="2" placeholder="Exercices, chapitres, consignes..."></textarea>
+        </div>
+        <div style="display:flex; justify-content:flex-end; gap:8px; margin-top:6px;">
+          <button type="button" onclick="window.closeMissionModal()" class="btn-ghost">Annuler</button>
+          <button type="submit" class="btn-primary">Enregistrer</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- MODAL 2 : AGENDA SLOT -->
+  <div id="slot-modal" class="modal-backdrop">
+    <div class="modal-box">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:18px;">
+        <h3 id="slot-modal-title" style="font-size:15px; font-weight:700;">Ajouter un créneau</h3>
+        <button type="button" onclick="window.closeSlotModal()" class="btn-ghost" style="padding:4px 7px; border:none;"><i class="ph ph-x"></i></button>
+      </div>
+      <form onsubmit="window.saveSlotForm(event)" style="display:flex; flex-direction:column; gap:13px;">
+        <input type="hidden" id="s-id" value="" />
+        <div>
+          <label style="font-size:11.5px; font-weight:600; color:var(--text-muted); display:block; margin-bottom:5px;">Intitulé du créneau *</label>
+          <input type="text" id="s-title" class="saas-input" placeholder="Ex: Colle Maths, Cours Optique, DS..." required />
+        </div>
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px;">
+          <div>
+            <label style="font-size:11.5px; font-weight:600; color:var(--text-muted); display:block; margin-bottom:5px;">Répétition</label>
+            <div id="s-recurrence-mount"></div>
+          </div>
+          <div>
+            <label style="font-size:11.5px; font-weight:600; color:var(--text-muted); display:block; margin-bottom:5px;">Matière</label>
+            <div id="s-subject-mount"></div>
+          </div>
+        </div>
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px;">
+          <div id="s-day-container">
+            <label style="font-size:11.5px; font-weight:600; color:var(--text-muted); display:block; margin-bottom:5px;">Jour de la semaine</label>
+            <div id="s-day-mount"></div>
+          </div>
+          <div id="s-date-container" style="display:none;">
+            <label style="font-size:11.5px; font-weight:600; color:var(--text-muted); display:block; margin-bottom:5px;">Date précise</label>
+            <input type="date" id="s-date" class="saas-input mono" />
+          </div>
+          <div class="slot-time-cell" style="display:grid; grid-template-columns:1fr 1fr; gap:8px;">
+            <div>
+              <label style="font-size:11.5px; font-weight:600; color:var(--text-muted); display:block; margin-bottom:5px;">Début</label>
+              <input type="time" id="s-start" class="saas-input mono" value="08:00" required />
+            </div>
+            <div>
+              <label style="font-size:11.5px; font-weight:600; color:var(--text-muted); display:block; margin-bottom:5px;">Fin</label>
+              <input type="time" id="s-end" class="saas-input mono" value="10:00" required />
+            </div>
+          </div>
+        </div>
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px;">
+          <div>
+            <label style="font-size:11.5px; font-weight:600; color:var(--text-muted); display:block; margin-bottom:5px;">Type</label>
+            <div id="s-type-mount"></div>
+          </div>
+          <div>
+            <label style="font-size:11.5px; font-weight:600; color:var(--text-muted); display:block; margin-bottom:5px;">Salle / Trinôme</label>
+            <input type="text" id="s-room" class="saas-input" placeholder="Ex: C204" />
+          </div>
+        </div>
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-top:6px;">
+          <button type="button" id="s-delete-btn" onclick="window.deleteCurrentSlot()" class="btn-ghost" style="color:#F87171; display:none;">
+            <i class="ph ph-trash"></i> Supprimer
+          </button>
+          <div style="display:flex; gap:8px; margin-left:auto;">
+            <button type="button" onclick="window.closeSlotModal()" class="btn-ghost">Annuler</button>
+            <button type="submit" class="btn-primary">Enregistrer</button>
+          </div>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- MODAL 3 : IMPORT CODE JSON PLANNING -->
+  <div id="schedule-import-modal" class="modal-backdrop">
+    <div class="modal-box" style="max-width:560px;">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px;">
+        <h3 style="font-size:15px; font-weight:700;">Importer un Planning JSON</h3>
+        <button type="button" onclick="window.closeScheduleImportModal()" class="btn-ghost" style="padding:4px 7px; border:none;"><i class="ph ph-x"></i></button>
+      </div>
+      <p style="font-size:12px; color:var(--text-muted); margin-bottom:12px;">
+        Colle ci-dessous un tableau JSON d'emploi du temps.
+      </p>
+      <textarea id="schedule-json-textarea" class="saas-input mono" rows="8" style="font-size:11.5px; margin-bottom:12px;" placeholder='[{"dayOfWeek":0,"start":"08:00"...}]'></textarea>
+      <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;">
+        <div style="display:flex; gap:8px; margin-left:auto;">
+          <button type="button" onclick="window.closeScheduleImportModal()" class="btn-ghost">Annuler</button>
+          <button type="button" onclick="window.applyScheduleJSON()" class="btn-primary">Importer le planning</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL 4 : POST-IT -->
+  <div id="postit-modal" class="modal-backdrop">
+    <div class="modal-box">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:18px;">
+        <h3 id="postit-modal-title" style="font-size:15px; font-weight:700;">Nouveau Post-it d'Erreur</h3>
+        <button type="button" onclick="window.closePostitModal()" class="btn-ghost" style="padding:4px 7px; border:none;"><i class="ph ph-x"></i></button>
+      </div>
+      <form onsubmit="window.savePostitForm(event)" style="display:flex; flex-direction:column; gap:13px;">
+        <input type="hidden" id="p-id" value="" />
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px;">
+          <div>
+            <label style="font-size:11.5px; font-weight:600; color:var(--text-muted); display:block; margin-bottom:5px;">Matière</label>
+            <div id="p-subject-mount"></div>
+          </div>
+          <div>
+            <label style="font-size:11.5px; font-weight:600; color:var(--text-muted); display:block; margin-bottom:5px;">Type d'erreur</label>
+            <div id="p-errtype-mount"></div>
+          </div>
+        </div>
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px;">
+          <div>
+            <label style="font-size:11.5px; font-weight:600; color:var(--text-muted); display:block; margin-bottom:5px;">Origine (DS, Colle, TD)</label>
+            <input type="text" id="p-source" class="saas-input" placeholder="Ex: DS 3, Colle S6..." />
+          </div>
+          <div>
+            <label style="font-size:11.5px; font-weight:600; color:var(--text-muted); display:block; margin-bottom:5px;">Couleur du papier</label>
+            <div id="p-color-mount"></div>
+          </div>
+        </div>
+        <div>
+          <label style="font-size:11.5px; font-weight:600; color:var(--text-muted); display:block; margin-bottom:5px;">Règle à retenir / Piège à éviter *</label>
+          <textarea id="p-text" class="saas-input" rows="2" placeholder="Ex: Toujours vérifier la continuité..." required></textarea>
+        </div>
+        <div>
+          <label style="font-size:11.5px; font-weight:600; color:var(--text-muted); display:flex; justify-content:space-between; margin-bottom:5px;">
+            <span>Schéma manuscrit (Optionnel)</span>
+            <button type="button" onclick="window.clearCanvas()" class="btn-ghost" style="padding:2px 6px; font-size:10px;">Effacer</button>
+          </label>
+          <canvas id="p-canvas" width="460" height="180" style="width:100%; border:1px solid rgba(0,0,0,0.15); border-radius:9px; background:rgba(255,255,255,0.2); touch-action:none; cursor:crosshair;"></canvas>
+        </div>
+        <div style="display:flex; justify-content:flex-end; gap:8px; margin-top:6px;">
+          <button type="button" onclick="window.closePostitModal()" class="btn-ghost">Annuler</button>
+          <button type="submit" class="btn-primary">Épingler</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- MODAL 5 : TYPES D'ERREURS -->
+  <div id="errtypes-modal" class="modal-backdrop">
+    <div class="modal-box">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;">
+        <h3 style="font-size:15px; font-weight:700;">Catégories d'Erreurs</h3>
+        <button type="button" onclick="window.closeErrorTypesModal()" class="btn-ghost" style="padding:4px 7px; border:none;"><i class="ph ph-x"></i></button>
+      </div>
+      <form onsubmit="window.addCustomErrorType(event)" style="display:flex; gap:8px; margin-bottom:14px;">
+        <input type="text" id="et-icon" class="saas-input" style="width:54px; text-align:center;" placeholder="⚠️" value="⚠️" required />
+        <input type="text" id="et-label" class="saas-input" style="flex:1;" placeholder="Nouveau type (ex: Signe)" required />
+        <button type="submit" class="btn-primary">Ajouter</button>
+      </form>
+      <div id="errtypes-list" style="display:flex; flex-direction:column; gap:6px; max-height:240px; overflow-y:auto;"></div>
+    </div>
+  </div>
+
+  <!-- MODAL 6 : RESET -->
+  <div id="reset-modal" class="modal-backdrop">
+    <div class="modal-box">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px;">
+        <h3 style="font-size:15px; font-weight:700;">Nettoyage & Remise à zéro</h3>
+        <button type="button" onclick="window.closeResetModal()" class="btn-ghost" style="padding:4px 7px; border:none;"><i class="ph ph-x"></i></button>
+      </div>
+      <p style="font-size:12.5px; color:var(--text-muted); margin-bottom:16px;">
+        Choisis l'action de nettoyage souhaitée pour repartir sur une base propre :
+      </p>
+      <div style="display:flex; flex-direction:column; gap:8px;">
+        <button type="button" onclick="window.clearDoneMissions()" class="btn-ghost" style="justify-content:space-between; padding:11px 14px;">
+          <span>Purger uniquement les missions terminées</span>
+          <i class="ph ph-check-circle"></i>
+        </button>
+        <button type="button" onclick="window.clearAllMissions()" class="btn-ghost" style="justify-content:space-between; padding:11px 14px; color:#F87171;">
+          <span>Supprimer 100 % des missions (Cahier vierge)</span>
+          <i class="ph ph-trash"></i>
+        </button>
+        <button type="button" onclick="window.factoryResetAll()" class="btn-ghost" style="justify-content:space-between; padding:11px 14px; color:#EF4444;">
+          <span>Réinitialiser toutes les données</span>
+          <i class="ph ph-warning"></i>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL 7 : SUPABASE CLOUD SYNC -->
+  <div id="supabase-modal" class="modal-backdrop">
+    <div class="modal-box">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;">
+        <h3 style="font-size:15px; font-weight:700;">Connexion à l'espace Cloud</h3>
+        <button type="button" onclick="window.closeSupabaseModal()" class="btn-ghost" style="padding:4px 7px; border:none;"><i class="ph ph-x"></i></button>
+      </div>
+      <form onsubmit="window.saveSupabaseConfig(event)" style="display:flex; flex-direction:column; gap:12px;">
+        <div style="display:flex; gap:8px; flex-wrap:wrap;">
+          <button type="button" onclick="window.showSupabaseQR()" class="btn-ghost" style="flex:1; justify-content:center; padding:9px 12px; font-size:12px;">
+            <i class="ph ph-qr-code text-base"></i> <span>Générer QR Code</span>
+          </button>
+          <button type="button" onclick="window.openQRScannerModal()" class="btn-ghost" style="flex:1; justify-content:center; padding:9px 12px; font-size:12px;">
+            <i class="ph ph-camera text-base"></i> <span>Scanner QR Code</span>
+          </button>
+        </div>
+
+        <div id="supa-qr-box" style="display:none; flex-direction:column; align-items:center; background:rgba(255,255,255,0.04); border:1px solid var(--border-subtle); border-radius:12px; padding:14px; margin-top:2px; text-align:center;">
+          <div style="font-size:11.5px; font-weight:600; color:var(--text-muted); margin-bottom:10px;">Scanne ce QR Code pour te connecter à cet espace</div>
+          <div id="supa-qrcode-canvas" style="background:#fff; padding:10px; border-radius:10px; display:inline-block;"></div>
+          <button type="button" onclick="document.getElementById('supa-qr-box').style.display='none'" class="btn-ghost" style="margin-top:10px; font-size:11px; padding:4px 10px;">Masquer</button>
+        </div>
+
+        <div>
+          <label style="font-size:11.5px; font-weight:600; color:var(--text-muted); display:block; margin-bottom:5px;">Identifiant de ton espace (Sync ID)</label>
+          <input type="text" id="supa-sync-id" class="saas-input mono" placeholder="Laisse vide pour Mode Local, ou tape pcsi_main" />
+          <p style="font-size:10.5px; color:var(--text-subtle); margin-top:6px;">Laisse vide pour rester 100% hors ligne, ou indique un identifiant (ex: pcsi_main) pour te synchroniser.</p>
+        </div>
+        <div style="display:flex; justify-content:flex-end; gap:8px; margin-top:6px;">
+          <button type="button" onclick="window.closeSupabaseModal()" class="btn-ghost">Fermer</button>
+          <button type="submit" class="btn-primary">Valider</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- MODAL 8 : SCANNER QR CODE -->
+  <div id="qr-scanner-modal" class="modal-backdrop">
+    <div class="modal-box" style="max-width:440px;">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px;">
+        <h3 style="font-size:15px; font-weight:700;"><i class="ph ph-camera"></i> Scanner le QR Code</h3>
+        <button type="button" onclick="window.closeQRScannerModal()" class="btn-ghost" style="padding:4px 7px; border:none;"><i class="ph ph-x"></i></button>
+      </div>
+      <div id="qr-reader" style="width:100%; border-radius:12px; overflow:hidden; background:#000; min-height:220px;"></div>
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-top:14px; gap:8px;">
+        <label class="btn-ghost" style="cursor:pointer; font-size:12px; padding:7px 12px;">
+          <i class="ph ph-image"></i> <span>Choisir une image</span>
+          <input type="file" id="qr-file-input" accept="image/*" style="display:none;" onchange="window.scanQRFromFile(event)" />
+        </label>
+        <button type="button" onclick="window.closeQRScannerModal()" class="btn-ghost">Fermer</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL 9 : ONBOARDING -->
+  <div id="onboarding-modal" class="modal-backdrop">
+    <div class="modal-box" style="max-width: 480px; padding: 28px;">
+      
+      <!-- Étape 1 : Le Cockpit Intelligent -->
+      <div id="onb-step-1" class="onb-step">
+        <div style="text-align: center; margin-bottom: 20px;">
+          <div style="display:inline-flex; align-items:center; justify-content:center; width:54px; height:54px; border-radius:14px; background:rgba(239, 68, 68, 0.14); border:1px solid rgba(239, 68, 68, 0.28); color:#EF4444; font-size:26px; margin-bottom:16px;">
+            <i class="ph-bold ph-gauge"></i>
+          </div>
+          <div class="mono" style="font-size:10.5px; color:var(--text-subtle); text-transform:uppercase; letter-spacing:0.08em; margin-bottom:4px;">Étape 1 / 3 · Bienvenue sur PCSI.OS</div>
+          <h3 style="font-size: 19px; font-weight: 700; margin-bottom: 10px;">Le Cockpit Intelligent</h3>
+          <p style="font-size: 13px; color: var(--text-muted); line-height: 1.6;">
+            L'algorithme de pression évalue vos missions selon leur <strong>charge de travail</strong> et leur <strong>échéance</strong>. La barre de progression change dynamiquement de couleur (du vert au rouge critique) pour vous indiquer quoi travailler en priorité.
+          </p>
+        </div>
+
+        <div style="background:rgba(255,255,255,0.03); border:1px solid var(--border-subtle); border-radius:12px; padding:12px 14px; margin-bottom:24px;">
+          <div style="display:flex; justify-content:space-between; align-items:center; font-size:11.5px; margin-bottom:6px;">
+            <span style="font-weight:600; color:var(--text-main);">DM Thermodynamique</span>
+            <span class="mono" style="color:#EF4444; font-weight:700; font-size:11px;">84% · CRITIQUE · Demain</span>
+          </div>
+          <div class="pressure-track">
+            <div class="pressure-fill" style="width:84%; background:linear-gradient(90deg, #F59E0B, #EF4444);"></div>
+          </div>
+        </div>
+
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+          <div class="onb-dots">
+            <span class="onb-dot active"></span><span class="onb-dot"></span><span class="onb-dot"></span>
+          </div>
+          <button type="button" class="btn-primary" onclick="window.onbGoStep(2)">Suivant <i class="ph-bold ph-arrow-right"></i></button>
+        </div>
+      </div>
+
+      <!-- Étape 2 : Le Mur d'Erreurs -->
+      <div id="onb-step-2" class="onb-step" style="display: none;">
+        <div style="text-align: center; margin-bottom: 20px;">
+          <div style="display:inline-flex; align-items:center; justify-content:center; width:54px; height:54px; border-radius:14px; background:rgba(168, 85, 247, 0.14); border:1px solid rgba(168, 85, 247, 0.28); color:#A855F7; font-size:26px; margin-bottom:16px;">
+            <i class="ph-bold ph-note-pencil"></i>
+          </div>
+          <div class="mono" style="font-size:10.5px; color:var(--text-subtle); text-transform:uppercase; letter-spacing:0.08em; margin-bottom:4px;">Étape 2 / 3 · Mémoire Active</div>
+          <h3 style="font-size: 19px; font-weight: 700; margin-bottom: 10px;">Le Mur d'Erreurs</h3>
+          <p style="font-size: 13px; color: var(--text-muted); line-height: 1.6;">
+            Ne refaites plus deux fois la même erreur en DS ou en colle. Dessinez directement au <strong>stylet</strong> sur les post-its (idéal pour les schémas de physique, chimie ou S.I.) et <strong>glissez-déposez-les</strong> pour réviser efficacement avant un DS.
+          </p>
+        </div>
+
+        <div style="background:rgba(255,255,255,0.03); border:1px solid var(--border-subtle); border-radius:12px; padding:12px 14px; margin-bottom:24px; display:flex; align-items:center; gap:12px;">
+          <div style="width:36px; height:36px; border-radius:8px; background:#FEF08A; color:#1F2937; display:flex; align-items:center; justify-content:center; font-size:18px; flex-shrink:0; transform:rotate(-4deg); box-shadow:0 4px 10px rgba(0,0,0,0.35);">
+            <i class="ph-bold ph-scribble-loop"></i>
+          </div>
+          <div style="font-size:12px; color:var(--text-muted); line-height:1.4;">
+            <strong style="color:var(--text-main);">Astuce :</strong> Filtrez vos post-its par matière ou par catégorie de piège (calcul, cours, hypothèse, unité).
+          </div>
+        </div>
+
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+          <button type="button" class="btn-ghost" onclick="window.onbGoStep(1)"><i class="ph-bold ph-arrow-left"></i> Retour</button>
+          <div class="onb-dots">
+            <span class="onb-dot"></span><span class="onb-dot active"></span><span class="onb-dot"></span>
+          </div>
+          <button type="button" class="btn-primary" onclick="window.onbGoStep(3)">Suivant <i class="ph-bold ph-arrow-right"></i></button>
+        </div>
+      </div>
+
+      <!-- Étape 3 : Synchronisation -->
+      <div id="onb-step-3" class="onb-step" style="display: none;">
+        <div style="text-align: center; margin-bottom: 18px;">
+          <div style="display:inline-flex; align-items:center; justify-content:center; width:54px; height:54px; border-radius:14px; background:rgba(16, 185, 129, 0.14); border:1px solid rgba(16, 185, 129, 0.28); color:#10B981; font-size:26px; margin-bottom:16px;">
+            <i class="ph-bold ph-cloud-arrow-up"></i>
+          </div>
+          <div class="mono" style="font-size:10.5px; color:var(--text-subtle); text-transform:uppercase; letter-spacing:0.08em; margin-bottom:4px;">Étape 3 / 3 · Cloud &amp; Multi-supports</div>
+          <h3 style="font-size: 19px; font-weight: 700; margin-bottom: 8px;">Synchronisation <span style="font-weight:400; color:var(--text-subtle); font-size: 14px;">(Optionnelle)</span></h3>
+          <p style="font-size: 13px; color: var(--text-muted); line-height: 1.55;">
+            Saisissez un <strong>Sync ID</strong> ou scannez un QR Code pour synchroniser vos appareils via le cloud, ou démarrez immédiatement en mode 100 % local.
+          </p>
+        </div>
+
+        <div style="background: rgba(255,255,255,0.03); padding: 14px; border-radius: 12px; border: 1px solid var(--border-subtle); margin-bottom: 22px;">
+          <div style="display:flex; gap:8px; flex-wrap:wrap; margin-bottom: 12px;">
+            <button type="button" onclick="window.openQRScannerModal()" class="btn-ghost" style="flex:1; justify-content:center; padding:9px 12px; font-size:12px;">
+              <i class="ph ph-camera text-base"></i> <span>Scanner un QR Code</span>
+            </button>
+          </div>
+          <div style="text-align: left;">
+            <label style="font-size:11.5px; font-weight:600; color:var(--text-muted); display:block; margin-bottom:5px;">Identifiant de ton espace (Sync ID)</label>
+            <input type="text" id="onb-sync-id" class="saas-input mono" placeholder="Ex: pcsi_main (optionnel)" />
+          </div>
+        </div>
+
+        <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
+          <button type="button" class="btn-ghost" onclick="window.onbGoStep(2)"><i class="ph-bold ph-arrow-left"></i> Retour</button>
+          <div style="display: flex; gap: 8px; flex-wrap: wrap; margin-left: auto;">
+            <button type="button" class="btn-ghost" onclick="window.finishOnboarding(false)">Commencer en local</button>
+            <button type="button" class="btn-primary" onclick="window.finishOnboarding(true)"><i class="ph-bold ph-plugs-connected"></i> Se connecter</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL 10 : AJOUTER/MODIFIER UN PORTAIL -->
+  <div id="portal-modal" class="modal-backdrop">
+    <div class="modal-box">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:18px;">
+        <h3 id="portal-modal-title" style="font-size:15px; font-weight:700;">Ajouter un lien CPGE</h3>
+        <button type="button" onclick="window.closePortalModal()" class="btn-ghost" style="padding:4px 7px; border:none;"><i class="ph ph-x"></i></button>
+      </div>
+      <form onsubmit="window.savePortalForm(event)" style="display:flex; flex-direction:column; gap:13px;">
+        <input type="hidden" id="port-id" value="" />
+        <div>
+          <label style="font-size:11.5px; font-weight:600; color:var(--text-muted); display:block; margin-bottom:5px;">Titre du lien *</label>
+          <input type="text" id="port-title" class="saas-input" placeholder="Ex: Cahier de Prépa, Moodle, Pronote..." required />
+        </div>
+        <div>
+          <label style="font-size:11.5px; font-weight:600; color:var(--text-muted); display:block; margin-bottom:5px;">Adresse URL *</label>
+          <input type="text" id="port-url" class="saas-input mono" placeholder="https://cahier-de-prepa.fr/..." required />
+        </div>
+        <div>
+          <label style="font-size:11.5px; font-weight:600; color:var(--text-muted); display:block; margin-bottom:5px;">Description courte</label>
+          <input type="text" id="port-desc" class="saas-input" placeholder="Ex: Cours, colloscope, documents..." />
+        </div>
+        <div>
+          <label style="font-size:11.5px; font-weight:600; color:var(--text-muted); display:block; margin-bottom:6px;">Icône</label>
+          <div id="port-icon-presets" style="display:flex; flex-wrap:wrap; gap:6px; margin-bottom:8px;">
+            <button type="button" class="icon-Preset-btn" data-icon="ph-book-open" onclick="window.selectPortalIcon('ph-book-open')" title="Livre"><i class="ph ph-book-open"></i></button>
+            <button type="button" class="icon-Preset-btn" data-icon="ph-cpu" onclick="window.selectPortalIcon('ph-cpu')" title="S.I. / CPU"><i class="ph ph-cpu"></i></button>
+            <button type="button" class="icon-Preset-btn" data-icon="ph-identification-badge" onclick="window.selectPortalIcon('ph-identification-badge')" title="ENT / Badge"><i class="ph ph-identification-badge"></i></button>
+            <button type="button" class="icon-Preset-btn" data-icon="ph-globe" onclick="window.selectPortalIcon('ph-globe')" title="Site web"><i class="ph ph-globe"></i></button>
+            <button type="button" class="icon-Preset-btn" data-icon="ph-graduation-cap" onclick="window.selectPortalIcon('ph-graduation-cap')" title="Concours / Études"><i class="ph ph-graduation-cap"></i></button>
+            <button type="button" class="icon-Preset-btn" data-icon="ph-flask" onclick="window.selectPortalIcon('ph-flask')" title="Physique / Chimie"><i class="ph ph-flask"></i></button>
+            <button type="button" class="icon-Preset-btn" data-icon="ph-function" onclick="window.selectPortalIcon('ph-function')" title="Mathématiques"><i class="ph ph-function"></i></button>
+            <button type="button" class="icon-Preset-btn" data-icon="ph-folder-open" onclick="window.selectPortalIcon('ph-folder-open')" title="Documents / Drive"><i class="ph ph-folder-open"></i></button>
+            <button type="button" class="icon-Preset-btn" data-icon="ph-link" onclick="window.selectPortalIcon('ph-link')" title="Lien"><i class="ph ph-link"></i></button>
+          </div>
+          <input type="text" id="port-icon" class="saas-input mono" style="font-size:12px;" placeholder="ex: ph-link, ph-book-open, ph-cpu..." value="ph-link" oninput="window.highlightPortalIcon(this.value)" />
+        </div>
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-top:6px;">
+          <button type="button" id="port-delete-btn" onclick="window.deletePortal()" class="btn-ghost" style="color:#F87171; display:none;">
+            <i class="ph ph-trash"></i> Supprimer
+          </button>
+          <div style="display:flex; gap:8px; margin-left:auto;">
+            <button type="button" onclick="window.closePortalModal()" class="btn-ghost">Annuler</button>
+            <button type="submit" class="btn-primary">Enregistrer</button>
+          </div>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- TOAST NOTIFICATION -->
+  <div id="toast">
+    <i class="ph-bold ph-check-circle" style="color:#10B981; font-size:16px;"></i>
+    <span id="toast-text">Action effectuée</span>
+  </div>
+
+  <script src="js/config.js"></script>
+  <script src="js/utils.js"></script>
+  <script src="js/state.js"></script>
+  <script src="js/ui.js"></script>
+  <script src="js/canvas.js"></script>
+  <script src="js/sync.js"></script>
+  <script src="js/missions.js"></script>
+  <script src="js/agenda.js"></script>
+  <script src="js/postits.js"></script>
+  <script src="js/data.js"></script>
+  <script src="js/portals.js"></script>
+  <script src="js/onboarding.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>

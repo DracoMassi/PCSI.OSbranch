@@ -1,0 +1,41 @@
+/* layout.css : grille de l'app, sidebar, navigation, zone de travail */
+.app-shell {
+  display: grid;
+  grid-template-columns: 248px 1fr;
+  min-height: 100vh;
+  position: relative;
+  z-index: 10;
+  transition: grid-template-columns 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.app-shell.sidebar-collapsed { grid-template-columns: 72px 1fr; }
+
+.sidebar {
+  background: var(--bg-nav);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border-right: 1px solid var(--border-subtle);
+  padding: 18px 12px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  position: sticky;
+  top: 0;
+  height: 100vh;
+  z-index: 50;
+  overflow-y: auto;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.sidebar::-webkit-scrollbar { display: none; }
+
+.nav-item {
+  display: flex; align-items: center; gap: 11px; padding: 9px 12px;
+  border-radius: 10px; color: var(--text-muted); font-size: 13px; font-weight: 600;
+  text-decoration: none; transition: all 0.15s ease;
+  background: transparent; border: 1px solid transparent; width: 100%; cursor: pointer; text-align: left;
+}
+.nav-item:hover { background: rgba(255, 255, 255, 0.04); color: var(--text-main); }
+.nav-item.active { background: rgba(255, 255, 255, 0.08); color: var(--text-main); border-color: rgba(255, 255, 255, 0.1); }
+
+.workspace { padding: 26px 34px; max-width: 1380px; width: 100%; margin: 0 auto; }
+

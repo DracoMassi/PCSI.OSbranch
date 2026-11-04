@@ -1,0 +1,67 @@
+/* base.css : variables de thème, reset, typographie, fond ambiant */
+:root {
+  color-scheme: dark;
+  --bg-canvas: #090A0F;
+  --bg-surface: rgba(17, 19, 26, 0.85);
+  --bg-surface-hover: rgba(24, 27, 36, 0.92);
+  --bg-elevated: #141720;
+  --bg-nav: rgba(12, 14, 20, 0.9);
+
+  --border-subtle: rgba(255, 255, 255, 0.07);
+  --border-hover: rgba(255, 255, 255, 0.15);
+  --border-focus: rgba(255, 255, 255, 0.28);
+
+  --text-main: #F8FAFC;
+  --text-muted: #94A3B8;
+  --text-subtle: #64748B;
+
+  /* Subject colors */
+  --col-maths: #EF4444;
+  --col-physique: #A855F7;
+  --col-chimie: #10B981;
+  --col-si: #64748B;
+  --col-francais: #3B82F6;
+  --col-anglais: #EAB308;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+  font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.mono { font-family: 'JetBrains Mono', monospace; }
+.handwriting { font-family: 'Caveat', cursive; }
+
+body {
+  background-color: var(--bg-canvas);
+  color: var(--text-main);
+  min-height: 100vh;
+  overflow-x: hidden;
+  position: relative;
+  font-size: 13.5px;
+  line-height: 1.5;
+}
+
+.ambient-glow {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  background:
+    radial-gradient(circle at 15% 10%, rgba(255, 255, 255, 0.03), transparent 40%),
+    radial-gradient(circle at 85% 85%, rgba(148, 163, 184, 0.025), transparent 45%);
+}
+
+.saas-card {
+  background: var(--bg-surface);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid var(--border-subtle);
+  border-radius: 14px;
+  transition: border-color 0.15s ease, background-color 0.15s ease;
+}
+.saas-card:hover { border-color: rgba(255, 255, 255, 0.12); }
+
