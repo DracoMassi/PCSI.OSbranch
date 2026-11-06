@@ -1,0 +1,29 @@
+{
+  "name": "PCSI.OS — Cockpit Prépa",
+  "short_name": "PCSI.OS",
+  "description": "Cockpit d'organisation et de planification pour CPGE",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "background_color": "#0b0d14",
+  "theme_color": "#0b0d14",
+  "icons": [
+    {
+      "src": "icon.png",
+      "sizes": "180x180",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "icon.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "icon.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}

@@ -1,0 +1,611 @@
+{
+  "pressKiosk": {
+    "newsAndGeopolitics": [
+      {
+        "id": "kiosk_guardian",
+        "name": "The Guardian",
+        "tag": "Royaume-Uni · Actualité & Société",
+        "desc": "Articles clairs sur la politique britannique, la société et l'actualité internationale.",
+        "url": "https://www.theguardian.com/international",
+        "icon": "ph-newspaper",
+        "accent": "#3B82F6"
+      },
+      {
+        "id": "kiosk_bbc",
+        "name": "BBC News",
+        "tag": "Royaume-Uni · Monde",
+        "desc": "L'actualité mondiale résumée dans un anglais limpide et facile à lire en 5 minutes.",
+        "url": "https://www.bbc.com/news/world",
+        "icon": "ph-globe-hemisphere-west",
+        "accent": "#EF4444"
+      },
+      {
+        "id": "kiosk_economist",
+        "name": "The Economist",
+        "tag": "Royaume-Uni · Géopolitique & Économie",
+        "desc": "La source numéro 1 d'où sont tirés les textes d'anglais aux concours CPGE.",
+        "url": "https://www.economist.com/",
+        "icon": "ph-chart-line-up",
+        "accent": "#F97316"
+      },
+      {
+        "id": "kiosk_foreign_affairs",
+        "name": "Foreign Affairs",
+        "tag": "États-Unis · Relations Internationales",
+        "desc": "Analyses de fond sur la diplomatie, les conflits et les grandes puissances mondiales.",
+        "url": "https://www.foreignaffairs.com/",
+        "icon": "ph-compass",
+        "accent": "#10B981"
+      }
+    ],
+    "cultureAndLongform": [
+      {
+        "id": "kiosk_atlantic",
+        "name": "The Atlantic",
+        "tag": "États-Unis · Idées & Société",
+        "desc": "Grands articles sur la culture américaine, l'histoire et les débats d'aujourd'hui.",
+        "url": "https://www.theatlantic.com/world/",
+        "icon": "ph-feather",
+        "accent": "#A855F7"
+      },
+      {
+        "id": "kiosk_newyorker",
+        "name": "The New Yorker",
+        "tag": "États-Unis · Culture & Reportages",
+        "desc": "Portraits, récits historiques et chroniques culturelles pour enrichir son vocabulaire.",
+        "url": "https://www.newyorker.com/",
+        "icon": "ph-book-open-text",
+        "accent": "#EAB308"
+      },
+      {
+        "id": "kiosk_nyt",
+        "name": "The New York Times",
+        "tag": "États-Unis · Actualité & Débats",
+        "desc": "Le grand quotidien américain pour suivre la politique et les sujets de société aux USA.",
+        "url": "https://www.nytimes.com/section/world",
+        "icon": "ph-buildings",
+        "accent": "#F8FAFC"
+      },
+      {
+        "id": "kiosk_ft",
+        "name": "Financial Times",
+        "tag": "Royaume-Uni · Économie Mondiale",
+        "desc": "Pour comprendre les enjeux économiques, l'énergie et le commerce international.",
+        "url": "https://www.ft.com/world",
+        "icon": "ph-bank",
+        "accent": "#06B6D4"
+      }
+    ]
+  },
+  "drops": [
+    {
+      "id": "drop_01",
+      "theme": "Tournants historiques & Faux-amis classiques",
+      "wordOfTheDay": {
+        "word": "A turning point / A watershed",
+        "phonetic": "/ˈwɔː.tə.ʃed/",
+        "partOfSpeech": "nom",
+        "meaning": "Un grand tournant décisif (le moment où tout bascule)",
+        "example": "The fall of the Berlin Wall in 1989 was a major watershed in European history.",
+        "exampleTranslation": "La chute du mur de Berlin en 1989 a été un grand tournant dans l'histoire européenne.",
+        "collocations": [
+          "a major watershed (un tournant majeur)",
+          "reach a turning point (atteindre un point de bascule)",
+          "a historic milestone (une étape historique)"
+        ]
+      },
+      "dailyFocus": {
+        "defaultMode": "grammar",
+        "topicTitle": "Exprimer un changement important",
+        "topicalWords": [
+          {
+            "term": "To trigger / To spark",
+            "translation": "Déclencher / Provoquer (une crise, un débat)",
+            "note": "Bien meilleur que 'to cause'. Ex: The new law sparked protests."
+          },
+          {
+            "term": "A bone of contention",
+            "translation": "Un sujet de désaccord / Une pomme de discorde",
+            "note": "Ex: Money remains a major bone of contention between them."
+          },
+          {
+            "term": "To strengthen / To shore up",
+            "translation": "Renforcer / Consolider",
+            "note": "Ex: Measures to strengthen the economy."
+          },
+          {
+            "term": "Ineffective / Toothless",
+            "translation": "Inefficace / Sans vrai pouvoir de sanction",
+            "note": "Ex: Critics called the law toothless (littéralement : 'sans dents')."
+          },
+          {
+            "term": "At stake",
+            "translation": "En jeu",
+            "note": "Ex: Thousands of jobs are at stake (Des milliers d'emplois sont en jeu)."
+          }
+        ],
+        "grammarTraps": [
+          {
+            "title": "Faux-ami n°1 : « Actually » ne veut PAS dire « actuellement » !",
+            "rule": "En anglais, « actually » veut dire « en fait / en réalité ». Pour dire « actuellement / en ce moment », il faut toujours utiliser « currently » ou « nowadays ».",
+            "wrong": "He is actually working in London this month. (Faux si on veut dire 'en ce moment')",
+            "right": "He is currently working in London. / Actually, he prefers Paris. (En fait, il préfère Paris)"
+          },
+          {
+            "title": "Faux-ami n°2 : « Comprehensive » ne veut PAS dire « compréhensif » !",
+            "rule": "« Comprehensive » signifie « complet / approfondi » (comme dans 'une étude complète'). Pour dire que quelqu'un est compréhensif (gentil, à l'écoute), on dit « understanding ».",
+            "wrong": "My teacher was very comprehensive when I explained my problem.",
+            "right": "My teacher was very understanding. / We need a comprehensive solution (une solution complète)."
+          }
+        ]
+      },
+      "articleOfTheDay": {
+        "title": "How Diplomacy Works in a Divided World",
+        "source": "Foreign Affairs",
+        "category": "Géopolitique",
+        "readingTime": "5 min",
+        "abstract": "Comment les pays négocient entre eux aujourd'hui lorsque l'ONU et les alliances traditionnelles sont bloquées.",
+        "url": "https://www.foreignaffairs.com/world"
+      },
+      "cultureGNiche": {
+        "category": "Histoire & Géopolitique",
+        "title": "1648 : La Paix de Westphalie, le jour où sont nés les États modernes",
+        "hook": "Aujourd'hui, l'idée que chaque pays a des frontières fixes et qu'aucun État étranger n'a le droit de lui dicter ses lois nous paraît évidente. Pourtant, cette règle a une date de naissance précise : les traités de Westphalie en 1648.",
+        "details": "Au XVIIe siècle, l'Europe sort de la guerre de Trente Ans (1618-1648), un conflit religieux atroce entre catholiques et protestants qui a tué près d'un tiers de la population allemande. Pour arrêter le massacre, les diplomates européens inventent en 1648 un système tout simple mais révolutionnaire : désormais, chaque État est « souverain » chez lui. Cela veut dire deux choses : 1) tous les pays sont juridiquement égaux (petits ou grands), et 2) aucun pays n'a le droit d'intervenir dans les affaires intérieures de son voisin au nom de la religion ou de la morale. 💡 En dissertation ou en colle : c'est l'exemple parfait pour expliquer comment on fait la paix entre des gens qui ne sont pas d'accord — en fixant des règles communes plutôt qu'en cherchant à imposer ses idées par la force."
+      }
+    },
+    {
+      "id": "drop_02",
+      "theme": "Pouvoir, Liberté & Mots invariables en anglais",
+      "wordOfTheDay": {
+        "word": "Widespread",
+        "phonetic": "/ˈwaɪd.spred/",
+        "partOfSpeech": "adjectif",
+        "meaning": "Très répandu / Généralisé",
+        "example": "There is widespread concern about the rise of fake news on social media.",
+        "exampleTranslation": "Il y a une inquiétude très répandue face à la montée des fausses informations sur les réseaux sociaux.",
+        "collocations": [
+          "widespread support (un soutien massif)",
+          "a widespread belief (une croyance très répandue)",
+          "widespread criticism (de vives critiques généralisées)"
+        ]
+      },
+      "dailyFocus": {
+        "defaultMode": "grammar",
+        "topicTitle": "Parler de l'opinion publique et de la société",
+        "topicalWords": [
+          {
+            "term": "To take for granted",
+            "translation": "Considérer comme acquis (ne plus se rendre compte de la valeur de quelque chose)",
+            "note": "Ex: We often take democracy for granted."
+          },
+          {
+            "term": "A gap / A divide",
+            "translation": "Un fossé / Une fracture (entre riches et pauvres, générations...)",
+            "note": "Ex: The growing gap between rich and poor."
+          },
+          {
+            "term": "To raise awareness",
+            "translation": "Sensibiliser le public / Faire prendre conscience",
+            "note": "Ex: A campaign to raise awareness about climate change."
+          },
+          {
+            "term": "To comply with (a rule)",
+            "translation": "Respecter / Se plier à (une règle, une loi)",
+            "note": "Ex: Companies must comply with safety rules."
+          },
+          {
+            "term": "Relevant",
+            "translation": "Pertinent / Utile pour le sujet (et PAS 'relevant de')",
+            "note": "Ex: That is a very relevant question (C'est une question très pertinente)."
+          }
+        ],
+        "grammarTraps": [
+          {
+            "title": "Les 4 mots qui ne prennent JAMAIS de « -s » : Information, Advice, News, Progress",
+            "rule": "En français, on dit « des informations, des conseils, des progrès ». En anglais, ces mots sont toujours au singulier ! On ne met jamais de '-s' à la fin et jamais 'a / an' devant. Pour dire 'un conseil', on dit 'a piece of advice'.",
+            "wrong": "He gave me some good advices and useful informations.",
+            "right": "He gave me some good advice and useful information."
+          },
+          {
+            "title": "Dire « Malgré » : ne jamais écrire « Despite of » !",
+            "rule": "Pour traduire « malgré », tu as le choix entre deux expressions : soit « despite » (tout seul, SANS 'of'), soit « in spite of » (en 3 mots). Mélanger les deux en écrivant 'despite of' est la faute la plus fréquente en copie.",
+            "wrong": "Despite of the rain, the match continued.",
+            "right": "Despite the rain, the match continued. (OU : In spite of the rain...)"
+          }
+        ]
+      },
+      "articleOfTheDay": {
+        "title": "Why Citizens Give Up Their Freedom for Comfort",
+        "source": "The Guardian",
+        "category": "Société & Politique",
+        "readingTime": "5 min",
+        "abstract": "Des caméras de surveillance aux algorithmes : pourquoi nous acceptons souvent de céder notre vie privée en échange de plus de confort.",
+        "url": "https://www.theguardian.com/uk/commentisfree"
+      },
+      "cultureGNiche": {
+        "category": "Philosophie & Politique",
+        "title": "La Boétie et l'énigme de la « Servitude volontaire » : pourquoi obéit-on à un tyran ?",
+        "hook": "En 1548, à seulement 18 ans, Étienne de La Boétie (le meilleur ami de Montaigne) pose une question toute simple mais redoutable : comment un seul dictateur peut-il opprimer des millions de personnes alors qu'il est tout seul et qu'elles sont des millions ?",
+        "details": "Si un tyran a du pouvoir, remarque La Boétie, ce n'est pas grâce à sa force physique (il n'a que deux bras et deux jambes comme tout le monde) : c'est parce que les citoyens acceptent de lui obéir ! Mais pourquoi obéit-on contre son propre intérêt ? La Boétie donne trois raisons très concrètes : 1) l'habitude (quand on naît sans liberté, on finit par trouver ça normal), 2) le divertissement (du pain, des fêtes et des spectacles pour endormir le peuple), et 3) la pyramide des petits chefs (le dictateur achète 10 proches, qui achètent 100 complices, qui contrôlent 10 000 personnes, chacune espérant avoir une miette du pouvoir). 💡 En copie : une référence hyper facile à résumer pour expliquer que le pouvoir repose avant tout sur le consentement et l'habitude."
+      }
+    },
+    {
+      "id": "drop_03",
+      "theme": "Information, Technologie & Temps en anglais",
+      "wordOfTheDay": {
+        "word": "Overwhelming",
+        "phonetic": "/ˌəʊ.vəˈwel.mɪŋ/",
+        "partOfSpeech": "adjectif",
+        "meaning": "Écrasant / Accablant / Immense (quand il y a trop de choses d'un coup)",
+        "example": "Students often face an overwhelming amount of information online.",
+        "exampleTranslation": "Les étudiants font souvent face à une quantité écrasante d'informations en ligne.",
+        "collocations": [
+          "an overwhelming majority (une écrasante majorité)",
+          "feel overwhelmed (se sentir dépassé / submergé)",
+          "overwhelming evidence (des preuves accablantes)"
+        ]
+      },
+      "dailyFocus": {
+        "defaultMode": "grammar",
+        "topicTitle": "Parler du numérique et de l'information",
+        "topicalWords": [
+          {
+            "term": "Reliable / Trustworthy",
+            "translation": "Fiable / Digne de confiance",
+            "note": "Ex: Is this website a reliable source of information?"
+          },
+          {
+            "term": "Biased",
+            "translation": "Biaisé / Partial (qui manque d'objectivité)",
+            "note": "Ex: Algorithms can be biased."
+          },
+          {
+            "term": "A double-edged sword",
+            "translation": "Une arme à double tranchant",
+            "note": "Super expression pour nuancer en colle ! Ex: AI is a double-edged sword."
+          },
+          {
+            "term": "To sort out",
+            "translation": "Trier / Régler un problème",
+            "note": "Ex: It is hard to sort out true facts from rumours."
+          },
+          {
+            "term": "Meaningless",
+            "translation": "Vide de sens / Absurde",
+            "note": "Contraire : Meaningful (qui a du sens, important)."
+          }
+        ],
+        "grammarTraps": [
+          {
+            "title": "Traduire « Depuis » : la règle toute simple entre « For » et « Since »",
+            "rule": "1) Utilise « FOR » devant une DURÉE chiffrée (for 2 hours, for 5 years). 2) Utilise « SINCE » devant un POINT DE DÉPART précis (since Monday, since 2020). Et attention : si ça continue aujourd'hui, le verbe se met à « have/has + participe passé » (et pas au présent simple comme en français !).",
+            "wrong": "I live in Paris since three years.",
+            "right": "I have lived in Paris for three years. (OU : since 2023)"
+          },
+          {
+            "title": "Faux-ami n°3 : « Sensible » vs « Sensitive »",
+            "rule": "C'est un piège classique : en anglais, « sensible » veut dire « raisonnable / plein de bon sens » (a sensible decision = une décision sage). Pour dire que quelqu'un est « sensible » (émotif) ou qu'un sujet est délicat, on dit « sensitive ».",
+            "wrong": "Climate change is a very sensible political issue.",
+            "right": "It is a sensitive issue (un sujet sensible). / Wearing a helmet is a sensible choice (un choix raisonnable)."
+          }
+        ]
+      },
+      "articleOfTheDay": {
+        "title": "When Too Much Data Makes Us Blind",
+        "source": "The Atlantic",
+        "category": "Culture & Technologie",
+        "readingTime": "6 min",
+        "abstract": "Pourquoi avoir accès à des milliards d'informations en un clic rend parfois plus difficile de réfléchir et de comprendre le monde.",
+        "url": "https://www.theatlantic.com/technology/"
+      },
+      "cultureGNiche": {
+        "category": "Littérature & Idées",
+        "title": "Borges et la « Bibliothèque de Babel » : quand trop d'informations tue l'information",
+        "hook": "En 1941, bien avant l'invention d'Internet et de ChatGPT, l'écrivain argentin Jorge Luis Borges a imaginé dans une courte nouvelle ce qui se passerait si l'humanité possédait absolument tous les livres possibles.",
+        "details": "Dans « La Bibliothèque de Babel », Borges décrit une bibliothèque géante qui contient toutes les combinaisons possibles de lettres de l'alphabet. Dedans, il y a donc le livre qui raconte toute ta vie future, la solution de tous les problèmes scientifiques... mais ils sont noyés au milieu de milliards de livres remplis de lettres au hasard ou de fausses versions ! Au début, les habitants sont fous de joie en pensant tout savoir ; puis ils tombent dans le désespoir en réalisant que tout avoir revient au même que ne rien avoir, car il est impossible de trouver le vrai livre au milieu du bruit. 💡 En copie ou en colle : c'est une image géniale pour parler d'Internet, des réseaux sociaux ou de l'IA — avoir accès à tout ne suffit pas, le vrai défi est de savoir trier et vérifier."
+      }
+    },
+    {
+      "id": "drop_04",
+      "theme": "Justice, Économie & Nuances utiles",
+      "wordOfTheDay": {
+        "word": "Fairness",
+        "phonetic": "/ˈfeə.nəs/",
+        "partOfSpeech": "nom",
+        "meaning": "L'équité / La justice (le fait que les règles soient justes pour tout le monde)",
+        "example": "Most citizens care deeply about fairness in the tax system.",
+        "exampleTranslation": "La plupart des citoyens tiennent beaucoup à ce que le système fiscal soit équitable.",
+        "collocations": [
+          "a sense of fairness (un sens de la justice)",
+          "a fair trial (un procès équitable)",
+          "fair enough (c'est juste / je comprends)"
+        ]
+      },
+      "dailyFocus": {
+        "defaultMode": "vocab",
+        "topicTitle": "Parler d'économie et d'inégalités simplement",
+        "topicalWords": [
+          {
+            "term": "To afford (something)",
+            "translation": "Avoir les moyens financiers de payer (quelque chose)",
+            "note": "Très utile ! Ex: Many students cannot afford high rents."
+          },
+          {
+            "term": "A safety net",
+            "translation": "Un filet de sécurité sociale (aides, chômage, santé)",
+            "note": "Ex: Public healthcare acts as a vital safety net."
+          },
+          {
+            "term": "Wealthy / Well-off",
+            "translation": "Aisé / Riche (plus soutenu que 'rich')",
+            "note": "Ex: Wealthy households (les ménages aisés)."
+          },
+          {
+            "term": "To struggle (to do something)",
+            "translation": "Avoir du mal à / Galérer pour",
+            "note": "Ex: Low-income families struggle to pay energy bills."
+          },
+          {
+            "term": "A level playing field",
+            "translation": "L'égalité des chances (partir avec les mêmes règles du jeu)",
+            "note": "Ex: Education should create a level playing field."
+          }
+        ],
+        "grammarTraps": [
+          {
+            "title": "Ne pas confondre « Economic » et « Economical »",
+            "rule": "1) « Economic » parle de l'ÉCONOMIE d'un pays (economic growth = la croissance économique, an economic crisis = une crise économique). 2) « Economical » veut dire « économe / qui ne coûte pas cher » (an economical car = une voiture qui consomme peu).",
+            "wrong": "The government is facing a serious economical crisis.",
+            "right": "The government is facing a serious economic crisis."
+          },
+          {
+            "title": "Après « Look forward to » (avoir hâte de) : toujours mettre « -ING » !",
+            "rule": "Dans « I look forward to... » (j'ai hâte de) ou « I am used to... » (j'ai l'habitude de), le mot « to » est une préposition. Du coup, si tu mets un verbe juste après, il prend obligatoirement « -ING » !",
+            "wrong": "I look forward to hear from you.",
+            "right": "I look forward to hearing from you. / She is used to working late."
+          }
+        ]
+      },
+      "articleOfTheDay": {
+        "title": "Can Education Still Guarantee Social Mobility?",
+        "source": "The Economist",
+        "category": "Société & Économie",
+        "readingTime": "5 min",
+        "abstract": "L'école permet-elle encore aux enfants de milieux modestes de réussir aussi bien que les autres dans les grandes démocraties ?",
+        "url": "https://www.economist.com/"
+      },
+      "cultureGNiche": {
+        "category": "Philosophie & Société",
+        "title": "Le « Voile d'ignorance » de John Rawls : l'expérience de pensée pour créer une société juste",
+        "hook": "Si on te demandait d'écrire les lois d'un pays (impôts, salaires, aides sociales), tu aurais forcément tendance à favoriser ta propre situation. En 1971, le philosophe américain John Rawls a trouvé une astuce géniale pour éviter ce biais.",
+        "details": "Dans sa « Théorie de la justice », Rawls propose une expérience toute simple qu'il appelle le « voile d'ignorance » : imagine que tu dois voter les règles d'une société, mais AVANT de naître, sans savoir qui tu seras dans cette société ! Tu ne sais pas si tu naîtras riche ou pauvre, en bonne santé ou handicapé, homme ou femme, à Paris ou dans un désert. Comme tu as peur de tomber sur la pire place, quelles règles vas-tu choisir ? Tu vas naturellement créer une société qui garantit les mêmes libertés pour tous ET qui protège au maximum les plus fragiles, au cas où ce serait toi ! 💡 Ultra efficace en colle d'anglais ou en français : c'est la façon la plus simple de définir ce qu'est une loi juste (une loi qu'on accepterait même si on était à la place du plus défavorisé)."
+      }
+    },
+    {
+      "id": "drop_05",
+      "theme": "Progrès, Futur & Structures qui font la différence",
+      "wordOfTheDay": {
+        "word": "Hindsight",
+        "phonetic": "/ˈhaɪnd.saɪt/",
+        "partOfSpeech": "nom",
+        "meaning": "Le recul (le fait de comprendre un événement après coup, une fois qu'il est passé)",
+        "example": "With the benefit of hindsight, it is easy to see the mistakes that were made.",
+        "exampleTranslation": "Avec le recul, il est facile de voir les erreurs qui ont été commises.",
+        "collocations": [
+          "in hindsight (avec le recul / après coup)",
+          "hindsight is always 20/20 (c'est toujours facile de juger après coup)"
+        ]
+      },
+      "dailyFocus": {
+        "defaultMode": "grammar",
+        "topicTitle": "Analyser le progrès et ses conséquences",
+        "topicalWords": [
+          {
+            "term": "A breakthrough",
+            "translation": "Une avancée majeure / Une découverte décisive",
+            "note": "Ex: A scientific breakthrough in medicine."
+          },
+          {
+            "term": "A side effect / A drawback",
+            "translation": "Un effet secondaire / Un inconvénient",
+            "note": "Idéal pour faire une partie 'Mais / Cependant' en colle."
+          },
+          {
+            "term": "Short-sighted",
+            "translation": "À courte vue (qui ne pense pas au long terme)",
+            "note": "Ex: A short-sighted decision (une décision à courte vue)."
+          },
+          {
+            "term": "Pace",
+            "translation": "Le rythme / La vitesse d'évolution",
+            "note": "Ex: Technology is changing at a breathtaking pace (à un rythme fou)."
+          },
+          {
+            "term": "To outweigh",
+            "translation": "L'emporter sur / Peser plus lourd que",
+            "note": "Ex: Do the benefits outweigh the risks? (Les avantages l'emportent-ils sur les risques ?)"
+          }
+        ],
+        "grammarTraps": [
+          {
+            "title": "Dire « Plus..., plus... » en anglais : « The more..., the more... »",
+            "rule": "Pour traduire « Plus on attend, plus c'est difficile », on met « THE + comparatif » au début de chaque partie de la phrase : « The longer we wait, the harder it gets ».",
+            "wrong": "More you practice, more you improve.",
+            "right": "The more you practice, the more you improve. / The faster it goes, the more dangerous it is."
+          },
+          {
+            "title": "Faux-ami n°4 : « Eventually » ne veut PAS dire « éventuellement » !",
+            "rule": "Attention, c'est un grand classique : « eventually » veut dire « finalement / au bout du compte » (après du temps). Pour dire « éventuellement / peut-être », utilise « possibly » ou « maybe ».",
+            "wrong": "We could eventually go to the cinema tonight if you want.",
+            "right": "We could possibly go tonight. / After hours of work, they eventually found the solution (ils ont finalement trouvé)."
+          }
+        ]
+      },
+      "articleOfTheDay": {
+        "title": "Why Every New Technology Creates Both Hope and Fear",
+        "source": "The New Yorker",
+        "category": "Histoire & Idées",
+        "readingTime": "6 min",
+        "abstract": "De l'imprimerie au train et à l'intelligence artificielle : pourquoi chaque grande invention bouleverse notre rapport au temps.",
+        "url": "https://www.newyorker.com/culture"
+      },
+      "cultureGNiche": {
+        "category": "Philosophie & Art",
+        "title": "L'« Ange de l'Histoire » de Walter Benjamin : le progrès avance-t-il les yeux bandés ?",
+        "hook": "En 1940, alors que l'Europe sombre dans la Seconde Guerre mondiale, le philosophe Walter Benjamin regarde un petit tableau du peintre Paul Klee intitulé « Angelus Novus » et en tire une image célèbre sur le progrès.",
+        "details": "Sur ce dessin, on voit un ange aux ailes déployées qui semble reculer, les yeux écarquillés. Benjamin écrit : « L'ange de l'histoire a le visage tourné vers le passé. » Une tempête violente venue du paradis s'engouffre dans ses ailes et le pousse irrésistiblement à reculons vers l'avenir, pendant que devant ses yeux s'accumulent les ruines et les catastrophes de l'histoire. Cette tempête, conclut Benjamin, « c'est ce que nous appelons le progrès ». 💡 Pourquoi c'est fort à citer : cela montre que le progrès technique (aller toujours plus vite, produire toujours plus) ne garantit pas automatiquement le progrès moral ou humain si on ne regarde pas les dégâts qu'on laisse derrière soi."
+      }
+    },
+    {
+      "id": "drop_06",
+      "theme": "Diplomatie, Paix & Généralités en anglais",
+      "wordOfTheDay": {
+        "word": "A stalemate / A deadlock",
+        "phonetic": "/ˈded.lɒk/",
+        "partOfSpeech": "nom",
+        "meaning": "Une impasse / Un blocage total (quand aucun camp ne peut gagner ou avancer)",
+        "example": "Peace talks have reached a complete deadlock after weeks of negotiation.",
+        "exampleTranslation": "Les négociations de paix sont arrivées dans une impasse totale après des semaines de discussion.",
+        "collocations": [
+          "break the deadlock (sortir de l'impasse)",
+          "a political stalemate (un blocage politique)"
+        ]
+      },
+      "dailyFocus": {
+        "defaultMode": "grammar",
+        "topicTitle": "Parler de conflits et de compromis",
+        "topicalWords": [
+          {
+            "term": "To reach a compromise",
+            "translation": "Trouver un compromis / Arriver à un accord",
+            "note": "Ex: Both sides finally reached a compromise."
+          },
+          {
+            "term": "To ease tensions",
+            "translation": "Apaiser les tensions / Calmer le jeu",
+            "note": "Contraire : To fuel tensions (attiser les tensions)."
+          },
+          {
+            "term": "A deterrent",
+            "translation": "Un moyen de dissuasion (ce qui décourage d'attaquer ou de tricher)",
+            "note": "Ex: Heavy fines act as a deterrent."
+          },
+          {
+            "term": "To backfire",
+            "translation": "Se retourner contre son auteur (avoir l'effet inverse de celui voulu)",
+            "note": "Très idiomatique ! Ex: The strategy completely backfired."
+          },
+          {
+            "term": "A lasting peace",
+            "translation": "Une paix durable",
+            "note": "Ex: Building a lasting peace requires trust."
+          }
+        ],
+        "grammarTraps": [
+          {
+            "title": "Ne PAS mettre « THE » quand on parle d'une chose en général !",
+            "rule": "En français, on met toujours 'le / la / les' : « La technologie change la société », « Les jeunes aiment voyager ». En anglais, quand on parle en général, on ne met PAS « the » ! On ne met « the » que si on précise de laquelle on parle.",
+            "wrong": "The technology is changing the society. / The young people use smartphones.",
+            "right": "Technology is changing society. / Young people use smartphones."
+          },
+          {
+            "title": "Dire « À peine... que » sans s'embrouiller : « No sooner... than » / « Hardly... when »",
+            "rule": "Si tu croises dans un texte d'anglais « Hardly had he arrived when... » ou « No sooner had it started than... », pas de panique : ça veut tout simplement dire « À peine était-il arrivé que... » ! C'est exactement comme en français quand on inverse le sujet ('À peine avait-il...').",
+            "wrong": "Hardly he had arrived than the phone rang.",
+            "right": "As soon as he arrived, the phone rang. (OU version soutenue : Hardly had he arrived when the phone rang.)"
+          }
+        ]
+      },
+      "articleOfTheDay": {
+        "title": "What History Teaches Us About Ending Wars",
+        "source": "BBC News",
+        "category": "Histoire & Monde",
+        "readingTime": "5 min",
+        "abstract": "Pourquoi certaines paix durent un siècle tandis que d'autres s'effondrent en quelques années : la différence entre punir et réintégrer un vaincu.",
+        "url": "https://www.bbc.com/news/world"
+      },
+      "cultureGNiche": {
+        "category": "Histoire & Diplomatie",
+        "title": "1815 vs 1919 : Pourquoi le Congrès de Vienne a réussi là où le Traité de Versailles a échoué",
+        "hook": "Comment faire la paix avec un pays qu'on vient de battre à la guerre sans qu'il cherche à se venger vingt ans plus tard ? L'histoire européenne offre une comparaison fascinante entre 1815 et 1919.",
+        "details": "En 1815, après 20 ans de guerres napoléoniennes, la France est vaincue. Au Congrès de Vienne, les vainqueurs (Angleterre, Autriche, Russie, Prusse) prennent une décision très intelligente grâce au diplomate français Talleyrand : au lieu d'humilier la France, ils l'invitent à la table des négociations et la réintègrent dans le « Concert européen ». Résultat : aucune guerre mondiale pendant 99 ans (jusqu'en 1914) ! À l'inverse, en 1919 au Traité de Versailles, l'Allemagne vaincue est exclue des discussions et humiliée, ce qui nourrira la colère menant à 1939. 💡 À retenir : une paix solide ne consiste pas à écraser son adversaire, mais à construire un équilibre où personne n'a intérêt à renverser la table."
+      }
+    },
+    {
+      "id": "drop_07",
+      "theme": "Langage, Débat & Pièges de vocabulaire",
+      "wordOfTheDay": {
+        "word": "Misleading",
+        "phonetic": "/ˌmɪsˈliː.dɪŋ/",
+        "partOfSpeech": "adjectif",
+        "meaning": "Trompeur / Qui induit en erreur (sans être forcément un mensonge direct)",
+        "example": "The advertisement was banned because its statistics were misleading.",
+        "exampleTranslation": "La publicité a été interdite parce que ses statistiques étaient trompeuses.",
+        "collocations": [
+          "a misleading headline (un titre d'article trompeur)",
+          "mislead the public (induire le public en erreur)"
+        ]
+      },
+      "dailyFocus": {
+        "defaultMode": "vocab",
+        "topicTitle": "Argumenter et nuancer à l'oral (Colles)",
+        "topicalWords": [
+          {
+            "term": "To point out / To highlight",
+            "translation": "Souligner / Faire remarquer",
+            "note": "Parfait en intro de colle : 'The author points out that...' (L'auteur souligne que...)."
+          },
+          {
+            "term": "To turn a blind eye to",
+            "translation": "Fermer les yeux sur (faire semblant de ne pas voir un problème)",
+            "note": "Ex: Authorities cannot turn a blind eye to pollution."
+          },
+          {
+            "term": "To address an issue",
+            "translation": "S'attaquer à un problème / Traiter une question",
+            "note": "Attention : 'to address' ne veut pas dire 'adresser la parole', mais 'résoudre/traiter un problème'."
+          },
+          {
+            "term": "On the one hand... on the other hand",
+            "translation": "D'une part... d'autre part",
+            "note": "Idéal pour structurer ta réponse à l'oral."
+          },
+          {
+            "term": "To blur the line (between A and B)",
+            "translation": "Brouiller la frontière (entre A et B)",
+            "note": "Ex: Social media blurs the line between information and entertainment."
+          }
+        ],
+        "grammarTraps": [
+          {
+            "title": "3 Faux-amis redoutables : « Pretend », « Resume », « Issue »",
+            "rule": "1) « To pretend » = Faire semblant (et pas prétendre, qui se dit 'to claim'). 2) « To resume » = Reprendre après une pause (et pas résumer, qui se dit 'to sum up'). 3) « An issue » = Un problème / un sujet de débat (et pas une sortie).",
+            "wrong": "Let me resume the article: the author pretends there is no issue.",
+            "right": "Let me sum up the article: the author claims there is no problem (ou: it is a major issue)."
+          },
+          {
+            "title": "Dire « Permettre à quelqu'un de faire » : toujours « Allow somebody TO do »",
+            "rule": "En anglais, on ne met jamais « allow to do » directement sans préciser QUI ! Soit on dit « allow + personne + TO + verbe » (This app allows students to organize their work), soit on utilise « enable + personne + TO + verbe ».",
+            "wrong": "This technology allows to save time.",
+            "right": "This technology allows us to save time. (Elle nous permet de gagner du temps)"
+          }
+        ]
+      },
+      "articleOfTheDay": {
+        "title": "Politics and the English Language: Why Clear Words Matter",
+        "source": "The Guardian",
+        "category": "Langage & Société",
+        "readingTime": "5 min",
+        "abstract": "Comment les gouvernements et les entreprises utilisent parfois des mots compliqués ou flous pour cacher des réalités très simples.",
+        "url": "https://www.theguardian.com/books"
+      },
+      "cultureGNiche": {
+        "category": "Littérature & Société",
+        "title": "George Orwell et la « Novlangue » : comment les mots peuvent manipuler la pensée",
+        "hook": "Dans son célèbre roman « 1984 », George Orwell imagine une dictature qui a trouvé un moyen encore plus efficace que la police pour empêcher les gens de se révolter : réduire et modifier le dictionnaire.",
+        "details": "Le principe de la « Novlangue » (Newspeak) d'Orwell est simple : si on supprime d'une langue les mots qui permettent d'exprimer une critique (comme « libre », « injuste », « révolte »), les citoyens finissent par ne même plus pouvoir formuler l'idée d'une révolte dans leur tête ! Orwell s'inspirait aussi de ce qu'il voyait dans la politique de son époque : utiliser des euphémismes doux pour cacher des réalités brutales — par exemple dire « pacification » au lieu de « bombardement », ou aujourd'hui dire « plan de sauvegarde de l'emploi » au lieu de « licenciements ». 💡 En copie : un exemple incontournable pour montrer que parler clairement et avec des mots précis est la première défense de l'esprit critique."
+      }
+    }
+  ]
+}
