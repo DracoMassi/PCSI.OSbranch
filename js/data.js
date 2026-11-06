@@ -162,19 +162,6 @@ window.saveAiApiKeySetting = function(val) {
   showToast(state.settings.aiApiKey ? 'Clé API IA enregistrée' : 'Mode IA Vision intégré activé');
 };
 
-window.saveQuickGeminiKey = function(val) {
-  const clean = (val || '').trim();
-  if (!clean || clean.length < 15) {
-    showToast('Colle une clé API Google Gemini valide (commençant par AIza...)');
-    return;
-  }
-  if (!state.settings) state.settings = JSON.parse(JSON.stringify(DEFAULT_SETTINGS));
-  state.settings.aiApiKey = clean;
-  saveState();
-  showToast('Clé Gemini enregistrée avec succès !');
-  window.analyzeStagedDocWithAI();
-};
-
 // =========================================================
 // CAMÉRA EN DIRECT (WEBRTC + BASCULE NATIVE MOBILE)
 // =========================================================
@@ -611,131 +598,71 @@ function extractJsonSlotsFromAiResponse(rawText) {
   }).filter(Boolean);
 }
 
-async function getAvailableGeminiKeys() {
-  const keys = [];
-
-  // 1. Clés codées directement dans js/config.js (GEMINI_API_KEYS)
-  if (typeof GEMINI_API_KEYS !== 'undefined' && Array.isArray(GEMINI_API_KEYS)) {
-    GEMINI_API_KEYS.forEach(k => {
-      const clean = String(k || '').trim();
-      if (clean && clean.length >= 20 && !clean.includes('TA_CLE')) keys.push(clean);
-    });
-  }
-
-  // 2. Clé enregistrée dans les préférences locales (UI / localStorage)
-  if (state && state.settings && state.settings.aiApiKey) {
-    const clean = String(state.settings.aiApiKey).trim();
-    if (clean && clean.length >= 20) keys.push(clean);
-  }
-
-  // 3. Fichier racine gemini-key.txt (s'il existe sur le repo ou en local)
-  try {
-    const res = await fetch('gemini-key.txt?v=' + Date.now(), { cache: 'no-store' });
-    if (res.ok) {
-      const text = await res.text();
-      text.split(/\r?\n/).forEach(line => {
-        const clean = line.replace(/^['"]+|['"]+$/g, '').trim();
-        if (clean && clean.length >= 20 && !clean.startsWith('#')) keys.push(clean);
-      });
-    }
-  } catch (e) {}
-
-  return Array.from(new Set(keys));
-}
-
-async function callGeminiDirectly(apiKey, promptText, images) {
-  const imageParts = [];
-  images.forEach(dataUrl => {
-    const str = String(dataUrl || '');
-    const mimeMatch = str.match(/^data:(image\/[a-zA-Z0-9.+-]+);base64,/i);
-    const mimeType = mimeMatch ? mimeMatch[1].toLowerCase() : 'image/jpeg';
-    const base64Data = str.includes(',') ? str.split(',')[1].replace(/\s/g, '') : str.replace(/\s/g, '');
-    if (base64Data) {
-      imageParts.push({
-        inlineData: {
-          mimeType,
-          data: base64Data
-        }
-      });
-    }
-  });
-
-  const models = ['gemini-2.5-flash', 'gemini-flash-latest', 'gemini-2.0-flash', 'gemini-2.5-flash-lite'];
-  let lastError = '';
-
-  for (const model of models) {
-    try {
-      const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${encodeURIComponent(apiKey)}`;
-      const res = await fetch(url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          contents: [{
-            parts: [{ text: promptText }, ...imageParts]
-          }],
-          generationConfig: {
-            temperature: 0.1
-          }
-        })
-      });
-
-      if (res.ok) {
-        const data = await res.json();
-        const text = (data?.candidates?.[0]?.content?.parts || []).map(p => p.text || '').join('\n').trim();
-        if (text) return text;
-      } else {
-        const errJson = await res.json().catch(() => ({}));
-        const msg = errJson?.error?.message || `HTTP ${res.status}`;
-        lastError = msg;
-        if (res.status === 400 && /API_KEY_INVALID|key not valid/i.test(msg)) {
-          throw new Error('Clé API Gemini invalide : vérifie ta clé Google AI Studio.');
-        }
-      }
-    } catch (e) {
-      if (e.message && e.message.includes('invalide')) throw e;
-      lastError = e.message;
-    }
-  }
-  throw new Error(lastError || 'Erreur de connexion à Gemini');
-}
-
 async function callVisionAiProviders(doc, promptText) {
   const images = (doc.pages || []).slice(0, 3);
-  const keys = await getAvailableGeminiKeys();
+  const localKey = (state.settings && state.settings.aiApiKey) ? state.settings.aiApiKey.trim() : '';
+  let netlifyErrorMsg = '';
 
-  // 1. Appel direct depuis le navigateur si une ou plusieurs clés sont renseignées dans le code / fichier / UI
-  // Cela fonctionne PARTOUT : en local (sans serveur), sur Netlify, sur mobile, sans aucun intermédiaire !
-  if (keys.length > 0) {
-    let lastErr = null;
-    for (const key of keys) {
-      try {
-        return await callGeminiDirectly(key, promptText, images);
-      } catch (err) {
-        lastErr = err;
-        // Si c'est une erreur de quota (429), la boucle passe directement à la clé suivante !
-      }
-    }
-    if (lastErr) throw lastErr;
-  }
-
-  // 2. Si aucune clé n'est renseignée dans le code, tenter le proxy Serverless Netlify (s'il est configuré)
+  // 1. Appel prioritaire à la fonction Serverless Netlify (/.netlify/functions/ai-schedule)
+  // Les clés Gemini (GEMINI_API_KEY_1, GEMINI_API_KEY_2...) sont stockées côté serveur sur Netlify :
+  // invisibles pour les utilisateurs, avec rotation automatique et aucun réglage requis.
   try {
     const netlifyRes = await fetch('/.netlify/functions/ai-schedule', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         prompt: promptText,
-        images
+        images,
+        clientApiKey: localKey
       })
     });
     if (netlifyRes.ok) {
       const data = await netlifyRes.json();
       if (data && data.text) return data.text;
+    } else if (netlifyRes.status !== 404) {
+      const errData = await netlifyRes.json().catch(() => ({}));
+      netlifyErrorMsg = errData.error || `Erreur serveur IA (${netlifyRes.status})`;
     }
-  } catch (e) {}
+  } catch (e) {
+    // En mode local hors Netlify, bascule transparente ci-dessous
+  }
 
-  // 3. Aucune clé trouvée : guider l'utilisateur pour coller sa clé en 1 seconde
-  throw new Error('AUCUNE_CLE');
+  // 2. Si une clé Gemini locale est présente (mode local hors Netlify), appeler l'API Gemini directement
+  if (localKey) {
+    const imageParts = [];
+    images.forEach(dataUrl => {
+      const str = String(dataUrl || '');
+      const mimeMatch = str.match(/^data:(image\/[a-zA-Z0-9.+-]+);base64,/i);
+      const mimeType = mimeMatch ? mimeMatch[1].toLowerCase() : 'image/jpeg';
+      const base64Data = str.includes(',') ? str.split(',')[1] : str;
+      if (base64Data) {
+        imageParts.push({ inline_data: { mime_type: mimeType, data: base64Data } });
+      }
+    });
+
+    const modelsToTry = ['gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-2.5-flash-lite', 'gemini-1.5-flash'];
+    for (const modelName of modelsToTry) {
+      const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${encodeURIComponent(localKey)}`;
+      const res = await fetch(geminiUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents: [{ parts: [{ text: promptText }, ...imageParts] }],
+          generationConfig: { temperature: 0.1, responseMimeType: 'application/json' }
+        })
+      });
+      if (res.ok) {
+        const data = await res.json();
+        const text = (data?.candidates?.[0]?.content?.parts || []).map(p => p.text || '').join('\n').trim();
+        if (text) return text;
+      }
+    }
+  }
+
+  if (netlifyErrorMsg) {
+    throw new Error(netlifyErrorMsg);
+  }
+  throw new Error('Redéploie ton site sur Netlify (ou pousse la mise à jour sur GitHub) pour activer tes clés GEMINI_API_KEY_1.');
 }
 
 window.analyzeStagedDocWithAI = async function() {
@@ -793,34 +720,12 @@ window.analyzeStagedDocWithAI = async function() {
       showToast(`${slots.length} créneau(x) convertis par l'IA !`);
     }
   } catch (err) {
-    if (err.message === 'AUCUNE_CLE') {
-      setScheduleFileStatus(`
-        <div style="display:flex; flex-direction:column; gap:8px;">
-          <div style="font-weight:700; color:#F59E0B; display:flex; align-items:center; gap:6px;">
-            <i class="ph-bold ph-key"></i> Clé Google Gemini requise pour la conversion
-          </div>
-          <p style="font-size:11.5px; color:var(--text-muted); margin:0; line-height:1.45;">
-            Colle ta clé dans le fichier <strong>gemini-key.txt</strong> à la racine (ou dans <strong>js/config.js</strong>), ou colle-la directement ci-dessous pour l'enregistrer dans ton navigateur :
-          </p>
-          <div style="display:flex; gap:6px; align-items:center; flex-wrap:wrap; margin-top:2px;">
-            <input type="password" id="sched-quick-key-input" class="saas-input mono" style="flex:1; min-width:180px; padding:6px 10px; font-size:11.5px; height:34px;" placeholder="AIzaSy..." />
-            <button type="button" onclick="window.saveQuickGeminiKey(document.getElementById('sched-quick-key-input').value)" class="btn-primary" style="padding:6px 14px; font-size:11.5px; height:34px;">
-              Enregistrer &amp; Lancer
-            </button>
-          </div>
-          <div style="font-size:10.5px; color:var(--text-subtle);">
-            Clé 100% gratuite disponible sur <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener" style="color:#38BDF8; text-decoration:underline;">aistudio.google.com</a>.
-          </div>
-        </div>
-      `);
-    } else {
-      setScheduleFileStatus(`
-        <div style="display:flex; justify-content:space-between; align-items:center; gap:8px; flex-wrap:wrap;">
-          <span style="color:#F87171;"><i class="ph-bold ph-warning"></i> ${escapeHtml(err.message || 'Erreur lors de la connexion à l\'IA.')}</span>
-          <button type="button" onclick="window.analyzeStagedDocWithAI()" class="btn-ghost" style="padding:4px 10px; font-size:11px; min-height:28px;">Réessayer</button>
-        </div>
-      `);
-    }
+    setScheduleFileStatus(`
+      <div style="display:flex; justify-content:space-between; align-items:center; gap:8px; flex-wrap:wrap;">
+        <span style="color:#F87171;"><i class="ph-bold ph-warning"></i> ${escapeHtml(err.message || 'Erreur lors de la connexion à l\'IA.')} Tu peux réessayer ou configurer une clé Gemini gratuite.</span>
+        <button type="button" onclick="window.analyzeStagedDocWithAI()" class="btn-ghost" style="padding:4px 10px; font-size:11px; min-height:28px;">Réessayer</button>
+      </div>
+    `);
   } finally {
     if (analyzeBtn) {
       analyzeBtn.disabled = false;

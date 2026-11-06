@@ -7,16 +7,6 @@ const DAILY_DROP_SEEN_KEY = 'pcsi_daily_drop_seen_date';
 const SUPABASE_URL = 'https://tuobyyfhwywbbwkayifw.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_qQg45ilq1NAzVqQ0eFfgyA_voFcptOm';
 
-// =========================================================
-// CLÉS D'API GOOGLE GEMINI (IMPORT IA COLLOSCOPE & EDT)
-// =========================================================
-// Tu peux coller directement ta clé Gemini entre les guillemets ci-dessous.
-// Si tu as plusieurs clés, sépare-les par des virgules : ["clé1", "clé2"]
-// Cela fonctionne partout : en local sur ton ordi, sur Netlify, sans aucun serveur !
-const GEMINI_API_KEYS = [
-  ""
-];
-
 const DEFAULT_SUBJECTS = {
   maths:    { id: 'maths',    name: 'Mathématiques', short: 'MATHS',    color: '#EF4444', builtin: true },
   physique: { id: 'physique', name: 'Physique',      short: 'PHYSIQUE', color: '#A855F7', builtin: true },
