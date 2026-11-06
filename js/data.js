@@ -600,6 +600,8 @@ function extractJsonSlotsFromAiResponse(rawText) {
 
 async function callVisionAiProviders(doc, promptText) {
   const images = (doc.pages || []).slice(0, 3);
+  const localKey = (state.settings && state.settings.aiApiKey) ? state.settings.aiApiKey.trim() : '';
+  let netlifyErrorMsg = '';
 
   // 1. Appel prioritaire à la fonction Serverless Netlify (/.netlify/functions/ai-schedule)
   // Les clés Gemini (GEMINI_API_KEY_1, GEMINI_API_KEY_2...) sont stockées côté serveur sur Netlify :
@@ -610,51 +612,57 @@ async function callVisionAiProviders(doc, promptText) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         prompt: promptText,
-        images
+        images,
+        clientApiKey: localKey
       })
     });
     if (netlifyRes.ok) {
       const data = await netlifyRes.json();
       if (data && data.text) return data.text;
+    } else if (netlifyRes.status !== 404) {
+      const errData = await netlifyRes.json().catch(() => ({}));
+      netlifyErrorMsg = errData.error || `Erreur serveur IA (${netlifyRes.status})`;
     }
   } catch (e) {
     // En mode local hors Netlify, bascule transparente ci-dessous
   }
 
-  // 2. Bascule automatique (Mode développement local hors Netlify ou si aucune clé n'est définie)
-  const contentBlocks = [{ type: 'text', text: promptText }];
-  images.forEach(dataUrl => {
-    contentBlocks.push({
-      type: 'image_url',
-      image_url: { url: dataUrl }
+  // 2. Si une clé Gemini locale est présente (mode local hors Netlify), appeler l'API Gemini directement
+  if (localKey) {
+    const imageParts = [];
+    images.forEach(dataUrl => {
+      const str = String(dataUrl || '');
+      const mimeMatch = str.match(/^data:(image\/[a-zA-Z0-9.+-]+);base64,/i);
+      const mimeType = mimeMatch ? mimeMatch[1].toLowerCase() : 'image/jpeg';
+      const base64Data = str.includes(',') ? str.split(',')[1] : str;
+      if (base64Data) {
+        imageParts.push({ inline_data: { mime_type: mimeType, data: base64Data } });
+      }
     });
-  });
 
-  const res = await fetch('https://text.pollinations.ai/openai', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      model: 'openai',
-      temperature: 0.1,
-      response_format: { type: 'json_object' },
-      messages: [
-        {
-          role: 'system',
-          content: 'You are an expert French CPGE timetable and colloscope vision parser. Always output valid JSON with a "slots" array.'
-        },
-        {
-          role: 'user',
-          content: contentBlocks
-        }
-      ]
-    })
-  });
-  if (!res.ok) throw new Error('Service IA occupé (' + res.status + ')');
-  const data = await res.json();
-  if (data && data.choices && data.choices[0] && data.choices[0].message) {
-    return data.choices[0].message.content || '';
+    const modelsToTry = ['gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-2.5-flash-lite', 'gemini-1.5-flash'];
+    for (const modelName of modelsToTry) {
+      const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${encodeURIComponent(localKey)}`;
+      const res = await fetch(geminiUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents: [{ parts: [{ text: promptText }, ...imageParts] }],
+          generationConfig: { temperature: 0.1, responseMimeType: 'application/json' }
+        })
+      });
+      if (res.ok) {
+        const data = await res.json();
+        const text = (data?.candidates?.[0]?.content?.parts || []).map(p => p.text || '').join('\n').trim();
+        if (text) return text;
+      }
+    }
   }
-  return typeof data === 'string' ? data : JSON.stringify(data);
+
+  if (netlifyErrorMsg) {
+    throw new Error(netlifyErrorMsg);
+  }
+  throw new Error('Redéploie ton site sur Netlify (ou pousse la mise à jour sur GitHub) pour activer tes clés GEMINI_API_KEY_1.');
 }
 
 window.analyzeStagedDocWithAI = async function() {
