@@ -2,37 +2,103 @@
 
 // SYNC SUPABASE : INITIALISÉ EN MODE LOCAL (VIDE)
 const DIRTY_KEY = 'pcsi_sync_dirty_v1';
-let syncDirty = false, syncOk = false, lastSyncAt = null, syncVersion = 0, lastDataSig = '', pushTimer = null, lastAutoSync = 0;
+let syncDirty = false, syncOk = false, syncSaving = false, syncError = false, lastSyncAt = null, syncVersion = 0, lastDataSig = '', pushTimer = null, lastAutoSync = 0;
 
 let supaConfig = { syncId: '' }; // Mode Local-First
-function dataSig() { return JSON.stringify({ t: state.tasks, s: state.schedule, p: state.postits, e: state.errorTypes, po: state.portals }); }
+function dataSig(src) {
+  const s = src || state;
+  return JSON.stringify({
+    t: s.tasks,
+    s: s.schedule,
+    sd: Array.isArray(s.scheduleDocs) ? s.scheduleDocs.map(d => d.id + ':' + (d.title || '')) : [],
+    p: s.postits,
+    e: s.errorTypes,
+    po: s.portals,
+    sub: s.subjects,
+    tt: s.taskTypes,
+    cfg: s.settings,
+    ev: s.eveningPlan
+  });
+}
 function supaConfigured() { return SUPABASE_URL !== '' && SUPABASE_KEY !== '' && supaConfig.syncId !== '' && !SUPABASE_URL.includes('TON_PROJET'); }
 function supaEndpoint() { return `${SUPABASE_URL.replace(/\/$/, '')}/rest/v1/cockpit_sync`; }
 function supaHeaders(extra) { return Object.assign({ 'Content-Type': 'application/json', 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${SUPABASE_KEY}` }, extra || {}); }
 
 function updateSyncIndicator() {
   const configured = supaConfigured();
-  const inSync = configured && syncOk && !syncDirty && navigator.onLine !== false;
-  document.querySelectorAll('.sync-dot').forEach(d => { d.classList.toggle('sync-ok', inSync); d.classList.toggle('sync-pending', !inSync); });
+  const offline = navigator.onLine === false;
+  const inSync = configured && syncOk && !syncDirty && !syncSaving && !syncError && !offline;
+  const isSaving = configured && !offline && (syncSaving || syncDirty);
+  const isError = configured && (offline || syncError);
+
+  document.querySelectorAll('.sync-dot').forEach(d => {
+    d.classList.remove('sync-ok', 'sync-pending', 'sync-saving', 'sync-error');
+    if (!configured) {
+      d.classList.add('sync-pending');
+    } else if (isError) {
+      d.classList.add('sync-error');
+    } else if (isSaving) {
+      d.classList.add('sync-saving');
+    } else if (inSync) {
+      d.classList.add('sync-ok');
+    } else {
+      d.classList.add('sync-pending');
+    }
+  });
+
+  let text, headerText, tip;
+  if (!configured) {
+    text = 'Mode Local';
+    headerText = 'Local-First';
+    tip = 'Stockage local actif · Cliquer pour configurer Cloud Sync';
+  } else if (isError) {
+    text = offline ? 'Hors ligne' : 'Erreur réseau';
+    headerText = offline ? 'Hors ligne' : 'Erreur réseau';
+    tip = 'Échec de connexion au serveur Cloud Supabase';
+  } else if (isSaving) {
+    text = 'Sauvegarde en cours...';
+    headerText = 'Sauvegarde en cours...';
+    tip = 'Synchronisation des modifications vers le Cloud...';
+  } else if (inSync) {
+    const t = lastSyncAt ? new Date(lastSyncAt).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }) : '';
+    text = 'Synchronisé';
+    headerText = 'Synchronisé';
+    tip = t ? `Synchronisé avec Supabase à ${t}` : 'Synchronisé avec Supabase';
+  } else {
+    text = 'En attente...';
+    headerText = 'En attente...';
+    tip = 'Connexion Cloud en attente';
+  }
+
   const label = document.getElementById('sync-label');
-  let text, tip;
-  if (!configured) { text = 'Mode Local'; tip = 'Non connecté au Cloud'; }
-  else if (inSync) { const t = lastSyncAt ? new Date(lastSyncAt).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }) : ''; text = 'Synchronisé'; tip = t ? `Synchro à ${t}` : 'Ok'; }
-  else if (navigator.onLine === false) { text = 'Hors ligne'; tip = 'Hors ligne'; }
-  else { text = 'Non synchronisé'; tip = syncDirty ? 'Modifications en attente' : 'En attente'; }
   if (label) label.textContent = text;
+  const headerLabel = document.getElementById('header-sync-label');
+  if (headerLabel) headerLabel.textContent = headerText;
   document.querySelectorAll('.sync-dot').forEach(d => { d.title = tip; });
 }
 
 async function pushToSupabase() {
   if (!supaConfigured()) return false;
   const v = syncVersion;
+  syncSaving = true;
+  syncError = false;
+  updateSyncIndicator();
   try {
     const res = await fetch(supaEndpoint(), { method: 'POST', headers: supaHeaders({ 'Prefer': 'resolution=merge-duplicates,return=minimal' }), body: JSON.stringify({ id: supaConfig.syncId, payload: state }) });
     if (!res.ok) throw new Error('HTTP ' + res.status);
     if (v === syncVersion) { syncDirty = false; try { localStorage.removeItem(DIRTY_KEY); } catch (e) {} }
-    syncOk = true; lastSyncAt = Date.now(); updateSyncIndicator(); return true;
-  } catch (e) { updateSyncIndicator(); return false; }
+    syncSaving = false;
+    syncError = false;
+    syncOk = true;
+    lastSyncAt = Date.now();
+    updateSyncIndicator();
+    return true;
+  } catch (e) {
+    syncSaving = false;
+    syncError = true;
+    updateSyncIndicator();
+    return false;
+  }
 }
 
 window.syncNowSupabase = async function(opts) {
@@ -45,34 +111,72 @@ window.syncNowSupabase = async function(opts) {
     return; 
   }
   lastAutoSync = Date.now();
+  // Une simple lecture (pull) n'est PAS une sauvegarde : on n'affiche pas "Sauvegarde en cours..."
+  syncError = false;
   try {
     if (forceFetch || !syncDirty) {
       const res = await fetch(`${supaEndpoint()}?id=eq.${encodeURIComponent(supaConfig.syncId)}&select=payload`, { headers: supaHeaders() });
       if (!res.ok) throw new Error('HTTP ' + res.status);
       const rows = await res.json();
       if (rows && rows.length && rows[0].payload) {
-        state = Object.assign(state, rows[0].payload); lastDataSig = dataSig(); syncDirty = false;
-        if (!state.portals || !state.portals.length) state.portals = JSON.parse(JSON.stringify(DEFAULT_PORTALS)); // Sécurité
+        const remote = rows[0].payload;
+        // Données Cloud identiques aux données locales : aucun changement, aucun re-rendu
+        if (dataSig(remote) === dataSig()) {
+          syncDirty = false;
+          try { localStorage.removeItem(DIRTY_KEY); } catch (e) {}
+          syncOk = true; lastSyncAt = Date.now(); updateSyncIndicator();
+          if (!silent) showToast('Déjà à jour');
+          return;
+        }
+        state = Object.assign(state, remote);
+        if (!state.portals || !state.portals.length) state.portals = JSON.parse(JSON.stringify(DEFAULT_PORTALS));
+        if (!remote.subjects || typeof remote.subjects !== 'object' || Object.keys(remote.subjects).length === 0) {
+          state.subjects = JSON.parse(JSON.stringify(DEFAULT_SUBJECTS));
+        } else {
+          state.subjects = remote.subjects;
+        }
+        if (!remote.taskTypes || typeof remote.taskTypes !== 'object' || Object.keys(remote.taskTypes).length === 0) {
+          state.taskTypes = JSON.parse(JSON.stringify(DEFAULT_TASK_TYPES));
+        } else {
+          state.taskTypes = remote.taskTypes;
+        }
+        syncSubjectsWithState();
+        syncTaskTypesWithState();
+        normalizeSettingsState();
+        normalizeTasksState();
+        lastDataSig = dataSig();
+        syncDirty = false;
+        syncSaving = false;
+        syncError = false;
         try { localStorage.removeItem(DIRTY_KEY); localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); } catch (e) {}
         syncOk = true; lastSyncAt = Date.now(); updateSyncIndicator(); 
+        if (typeof window.refreshAllSubjectSelects === 'function') window.refreshAllSubjectSelects();
         renderPortals(); renderActiveTab();
         if (!silent) showToast('Données actualisées depuis Supabase');
-        if (refIco) setTimeout(() => refIco.classList.remove('animate-spin'), 350);
         return;
       }
     }
     const ok = await pushToSupabase();
     if (!silent) showToast(ok ? 'Données envoyées vers Supabase' : 'Échec de la synchronisation');
-  } catch (e) { updateSyncIndicator(); if (!silent) showToast('Impossible de joindre Supabase'); }
+  } catch (e) {
+    syncSaving = false;
+    syncError = true;
+    updateSyncIndicator();
+    if (!silent) showToast('Impossible de joindre Supabase');
+  }
   finally { if (refIco) setTimeout(() => refIco.classList.remove('animate-spin'), 350); }
 };
 
-window.addEventListener('online', () => { updateSyncIndicator(); if (supaConfigured()) window.syncNowSupabase({ silent: true }); });
+window.addEventListener('online', () => { syncError = false; updateSyncIndicator(); if (supaConfigured()) window.syncNowSupabase({ silent: true }); });
 window.addEventListener('offline', updateSyncIndicator);
-document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && supaConfigured() && Date.now() - lastAutoSync > 20000) window.syncNowSupabase({ silent: true }); });
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && supaConfigured() && Date.now() - lastAutoSync > 60000) window.syncNowSupabase({ silent: true }); });
 
 
-window.openSupabaseModal = function() { document.getElementById('supa-sync-id').value = supaConfig.syncId || ''; document.getElementById('supabase-modal').classList.add('open'); };
+window.openSupabaseModal = function() {
+  document.getElementById('supa-sync-id').value = supaConfig.syncId || '';
+  document.getElementById('supabase-modal').classList.add('open');
+  if (typeof window.focusModalInput === 'function') window.focusModalInput('supa-sync-id');
+};
 window.closeSupabaseModal = function() { document.getElementById('supabase-modal').classList.remove('open'); const qrBox = document.getElementById('supa-qr-box'); if (qrBox) qrBox.style.display = 'none'; };
 
 window.saveSupabaseConfig = function(e) {
@@ -133,5 +237,3 @@ function handleDecodedQR(decodedText) {
     }
   } catch (e) {} showToast('QR code invalide');
 }
-
-
