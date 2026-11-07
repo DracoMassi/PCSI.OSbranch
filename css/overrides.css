@@ -251,32 +251,32 @@ input[type="date"]::-webkit-date-and-time-value, input[type="time"]::-webkit-dat
 .k-handle { display: inline-flex; align-items: center; justify-content: center; width: 30px; height: 30px; border-radius: 9px; color: var(--text-muted); background: rgba(255, 255, 255, 0.06); cursor: grab; touch-action: none; flex-shrink: 0; font-size: 17px; user-select: none; -webkit-user-select: none; }
 
 /* ================================================================
-   ADAPTATION TABLETTE / iPAD (901px — 1180px)
+   ADAPTATION TABLETTE / iPAD PAYSAGE (901px — 1180px)
    ================================================================ */
 @media (min-width: 901px) and (max-width: 1180px) {
-  .app-shell {
-    grid-template-columns: 224px minmax(0, 1fr);
-    padding: 12px;
-    gap: 14px;
+  .app-shell,
+  .app-shell.v3-bento-shell {
+    padding: 12px 16px 36px !important;
+    gap: 14px !important;
   }
-  .workspace {
-    padding: 6px 8px 28px 4px;
+  .sidebar.v3-top-dock {
+    padding: 8px 12px;
+    gap: 8px;
   }
-  .workspace > header {
-    padding: 14px 18px !important;
-    margin-bottom: 18px !important;
+  .v3-segmented-nav .nav-item {
+    padding: 7px 11px;
+    font-size: 12px;
+    gap: 6px;
   }
-  .kpi-row {
-    gap: 12px !important;
+  .v3-quick-tools {
+    display: none;
   }
-  .kpi-row .saas-card {
-    padding: 16px 18px !important;
-  }
-  .kpi-row .mono {
-    font-size: 24px !important;
+  .v3-bento-cahier-grid {
+    grid-template-columns: 315px minmax(0, 1fr) !important;
+    gap: 16px !important;
   }
   .kanban-board {
-    grid-template-columns: repeat(3, minmax(210px, 1fr));
+    grid-template-columns: repeat(3, minmax(195px, 1fr));
     gap: 12px;
   }
   .evening-planner-grid {
@@ -292,21 +292,45 @@ input[type="date"]::-webkit-date-and-time-value, input[type="time"]::-webkit-dat
    ADAPTATION iPAD PORTRAIT & MOBILE (<= 900px) — FLOATING GLASS DOCK
    ================================================================ */
 @media (max-width: 900px) {
-  .app-shell {
-    grid-template-columns: minmax(0, 1fr) !important;
+  .app-shell,
+  .app-shell.v3-bento-shell {
+    display: block !important;
     padding: 0 !important;
-    gap: 0 !important;
   }
-  .workspace {
-    padding: calc(12px + env(safe-area-inset-top)) 14px calc(110px + env(safe-area-inset-bottom)) 14px !important;
+  .sidebar.v3-top-dock {
+    display: none !important;
   }
-  .workspace > header {
-    margin-bottom: 16px !important;
-    padding: 13px 16px !important;
+  .workspace,
+  .workspace.v3-workspace {
+    padding: calc(12px + env(safe-area-inset-top)) 14px calc(112px + env(safe-area-inset-bottom)) 14px !important;
+  }
+  .v3-context-header {
+    background: linear-gradient(145deg, rgba(255, 255, 255, 0.065) 0%, rgba(18, 23, 36, 0.45) 100%) !important;
+    backdrop-filter: var(--glass-blur) !important;
+    -webkit-backdrop-filter: var(--glass-blur) !important;
+    border: 1px solid var(--border-glass) !important;
     border-radius: 20px !important;
+    padding: 12px 15px !important;
+    margin-bottom: 14px !important;
+    box-shadow: var(--glass-shadow) !important;
     flex-wrap: nowrap !important;
   }
   #view-subtitle { display: none; }
+
+  .v3-bento-cahier-grid {
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 14px !important;
+  }
+  .v3-bento-side-col {
+    position: static !important;
+    width: 100% !important;
+    gap: 14px !important;
+  }
+  .v3-bento-main-col {
+    width: 100% !important;
+    gap: 14px !important;
+  }
 
   /* Floating iOS/visionOS Pill Tab Bar */
   .mobile-nav {
@@ -372,11 +396,7 @@ input[type="date"]::-webkit-date-and-time-value, input[type="time"]::-webkit-dat
   body[data-tab="agenda"] .fab, body[data-tab="sites"] .fab, body[data-tab="dailydrop"] .fab { display: none !important; }
   #daily-drop-invite-toast, .dd-invite-toast { display: none !important; opacity: 0 !important; pointer-events: none !important; }
   #toast { bottom: calc(150px + env(safe-area-inset-bottom)); }
-  .qa-form { display: grid !important; grid-template-columns: 1fr 1fr; gap: 10px !important; padding: 14px !important; }
-  .qa-form > * { width: 100% !important; min-width: 0 !important; }
-  .qa-form #qa-type-pills, .qa-form #qa-title, .qa-form #qa-subject-select, .qa-form button[type="submit"] { grid-column: 1 / -1; }
-  .qa-field { display: flex; flex-direction: column; gap: 4px; }
-  .qa-lbl { display: block; font-size: 10.5px; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.03em; }
+  .qa-form.v3-qa-studio { padding: 15px !important; }
   .qa-field input { width: 100% !important; min-width: 0; height: 42px; }
   .qa-form #qa-title { height: 44px; }
   .qa-form .custom-select-trigger { height: 42px; }

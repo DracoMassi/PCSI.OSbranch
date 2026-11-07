@@ -28,224 +28,247 @@
 
   <div class="ambient-glow"></div>
 
-  <div id="app-shell" class="app-shell">
+  <div id="app-shell" class="app-shell v3-bento-shell">
 
-    <!-- LEFT SIDEBAR -->
-    <aside class="sidebar">
-      <div style="width:100%;">
-        <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:22px; padding:0 4px;">
-          <div style="display:flex; align-items:center; gap:10px;" class="hide-collapsed">
-            <img src="icon.png" alt="Logo" class="brand-logo" onerror="this.style.display='none';" />
-            <div>
-              <div class="brand-name">PCSI<span>.OS</span></div>
-              <div id="brand-subtitle" class="mono" style="font-size:10px; color:var(--text-subtle);">COCKPIT PRÉPA</div>
-            </div>
-          </div>
-          <button type="button" onclick="window.toggleSidebar()" class="btn-ghost" style="padding:6px 8px; border-color:transparent;" title="Réduire / Agrandir">
-            <i class="ph ph-sidebar-simple text-base"></i>
-          </button>
-        </div>
-
-        <div style="margin-bottom:18px;" class="hide-collapsed">
-          <button type="button" onclick="window.openMissionModal(null)" class="btn-primary" style="width:100%;">
-            <i class="ph-bold ph-plus"></i>
-            <span>Nouvelle mission</span>
-          </button>
-        </div>
-
-        <nav style="display:flex; flex-direction:column; gap:3px;">
-          <button type="button" id="nav-cahier" onclick="window.switchTab('cahier')" class="nav-item active" title="Missions">
-            <i class="ph ph-check-square-offset text-base"></i>
-            <span class="hide-collapsed">Missions</span>
-          </button>
-          <button type="button" id="nav-agenda" onclick="window.switchTab('agenda')" class="nav-item" title="Emploi du temps &amp; Soirée">
-            <i class="ph ph-calendar-blank text-base"></i>
-            <span class="hide-collapsed">Agenda &amp; Soirée</span>
-          </button>
-          <button type="button" id="nav-postits" onclick="window.switchTab('postits')" class="nav-item" title="Mur d'erreurs">
-            <i class="ph ph-note text-base"></i>
-            <span class="hide-collapsed">Mur d'erreurs</span>
-          </button>
-          <button type="button" id="nav-dailydrop" onclick="window.switchTab('dailydrop')" class="nav-item" title="Daily Drop : English &amp; Culture G" style="position:relative;">
-            <i class="ph ph-newspaper-clipping text-base"></i>
-            <span class="hide-collapsed">Daily Drop</span>
-            <span id="dailydrop-nav-badge" class="dd-unread-dot" style="display:none;" title="Nouveau Drop disponible aujourd'hui"></span>
-          </button>
-          <button type="button" id="nav-sites" onclick="window.switchTab('sites')" class="nav-item" title="Portails &amp; Réglages">
-            <i class="ph ph-sliders-horizontal text-base"></i>
-            <span class="hide-collapsed">Sites &amp; Réglages</span>
-          </button>
-        </nav>
-      </div>
-
-      <div class="hide-collapsed" style="border-top:1px solid var(--border-subtle); padding-top:14px; width:100%;">
-        <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:6px; padding:0 8px;">
-          <span style="font-size:10.5px; font-weight:700; color:var(--text-subtle); text-transform:uppercase; letter-spacing:0.04em;">Portails CPGE</span>
-          <button type="button" onclick="window.openPortalModal(null)" class="btn-ghost" style="padding:2px 6px; font-size:11px; border:none;" title="Ajouter un lien">
-            <i class="ph-bold ph-plus"></i>
-          </button>
-        </div>
-        
-        <!-- LIENS DYNAMIQUES ICI -->
-        <div id="sidebar-portals-mount" style="display:flex; flex-direction:column; gap:2px; margin-bottom:14px;"></div>
-
-        <div style="display:flex; align-items:center; justify-content:space-between; background:rgba(255,255,255,0.025); padding:8px 10px; border-radius:10px; border:1px solid var(--border-subtle);">
-          <div style="display:flex; align-items:center; gap:7px;">
-            <span id="sync-dot" class="sync-dot sync-pending"></span>
-            <span id="sync-label" class="mono" style="font-size:11px; color:var(--text-muted);">Mode Local</span>
-          </div>
-          <div style="display:flex; gap:4px;">
-            <button type="button" onclick="window.syncNowSupabase()" class="btn-ghost" style="padding:4px 6px; border:none;" title="Synchroniser">
-              <i class="ph ph-arrows-clockwise"></i>
-            </button>
-            <button type="button" onclick="window.openSupabaseModal()" class="btn-ghost" style="padding:4px 6px; border:none;" title="Connexion Cloud">
-              <i class="ph ph-gear-six"></i>
-            </button>
+    <!-- ========================================================== -->
+    <!-- V3 TOP FLOATING COMMAND DOCK (REPLACES OLD LEFT SIDEBAR)    -->
+    <!-- ========================================================== -->
+    <aside class="sidebar v3-top-dock">
+      <!-- Left: Brand Identity & Context -->
+      <div class="v3-dock-brand">
+        <div class="v3-brand-badge">
+          <img src="icon.png" alt="Logo" class="brand-logo" onerror="this.style.display='none';" />
+          <div>
+            <div class="brand-name">PCSI<span>.OS</span></div>
+            <div id="brand-subtitle" class="mono" style="font-size:9.5px; color:var(--text-subtle); letter-spacing:0.08em;">COMMAND CENTER V3</div>
           </div>
         </div>
       </div>
-    </aside>
 
-    <!-- MAIN WORKSPACE -->
-    <main class="workspace">
-      <header style="display:flex; justify-content:space-between; align-items:center; margin-bottom:24px; padding-bottom:16px; border-bottom:1px solid var(--border-subtle); gap:12px; flex-wrap:wrap;">
-        <div style="display:flex; align-items:center; gap:12px; min-width:0;">
-          <img src="icon.png" alt="Logo" class="header-logo only-mobile" onerror="this.style.display='none';" />
-          <div style="min-width:0;">
-            <div class="brand-name only-mobile" style="font-size:11.5px; margin-bottom:3px;">PCSI<span>.OS</span></div>
-            <h1 id="view-title" style="font-size:20px; font-weight:700; letter-spacing:-0.02em;">Missions &amp; Cahier de Texte</h1>
-            <p id="view-subtitle" style="font-size:12.5px; color:var(--text-muted);">Priorisation dynamique selon l'échéance et la charge de travail</p>
-          </div>
+      <!-- Center: Segmented Pill Navigation -->
+      <nav class="v3-segmented-nav" aria-label="Navigation principale">
+        <button type="button" id="nav-cahier" onclick="window.switchTab('cahier')" class="nav-item active" title="Missions">
+          <i class="ph-bold ph-check-square-offset"></i>
+          <span>Missions</span>
+        </button>
+        <button type="button" id="nav-agenda" onclick="window.switchTab('agenda')" class="nav-item" title="Emploi du temps &amp; Soirée">
+          <i class="ph-bold ph-calendar-blank"></i>
+          <span>Agenda &amp; Soirée</span>
+        </button>
+        <button type="button" id="nav-postits" onclick="window.switchTab('postits')" class="nav-item" title="Mur d'erreurs">
+          <i class="ph-bold ph-note"></i>
+          <span>Mur d'erreurs</span>
+        </button>
+        <button type="button" id="nav-dailydrop" onclick="window.switchTab('dailydrop')" class="nav-item" title="Daily Drop : English &amp; Culture G" style="position:relative;">
+          <i class="ph-bold ph-newspaper-clipping"></i>
+          <span>Daily Drop</span>
+          <span id="dailydrop-nav-badge" class="dd-unread-dot" style="display:none;" title="Nouveau Drop disponible aujourd'hui"></span>
+        </button>
+        <button type="button" id="nav-sites" onclick="window.switchTab('sites')" class="nav-item" title="Portails &amp; Réglages">
+          <i class="ph-bold ph-sliders-horizontal"></i>
+          <span>Portails &amp; Réglages</span>
+        </button>
+      </nav>
+
+      <!-- Right: Cloud Sync Pill & Primary Action CTA -->
+      <div class="v3-dock-actions">
+        <div class="v3-sync-capsule" title="Synchronisation Cloud">
+          <span id="sync-dot" class="sync-dot sync-pending"></span>
+          <span id="sync-label" class="mono v3-sync-text">Mode Local</span>
+          <button type="button" id="header-refresh-btn" onclick="window.syncNowSupabase({ forceFetch: true })" class="v3-icon-btn" title="Actualiser et synchroniser avec Supabase">
+            <i class="ph-bold ph-arrows-clockwise" id="header-refresh-ico"></i>
+          </button>
+          <button type="button" onclick="window.openSupabaseModal()" class="v3-icon-btn" title="Connexion Cloud">
+            <i class="ph-bold ph-cloud-arrow-up"></i>
+          </button>
         </div>
-        <div style="display:flex; align-items:center; gap:8px;">
-          <button type="button" id="header-refresh-btn" onclick="window.syncNowSupabase({ forceFetch: true })" class="btn-ghost" title="Actualiser et synchroniser avec Supabase">
-            <i class="ph ph-arrows-clockwise text-base" id="header-refresh-ico"></i> <span class="hide-mobile">Actualiser</span>
+
+        <div class="v3-quick-tools hide-mobile">
+          <button type="button" onclick="window.exportJSON()" class="v3-icon-btn" title="Exporter JSON">
+            <i class="ph-bold ph-download-simple"></i>
           </button>
-          <button type="button" onclick="window.openSettingsSection()" class="btn-ghost hide-mobile" title="Paramètres de tension, rythme de soirée et matières">
-            <i class="ph ph-sliders-horizontal"></i> <span>Réglages</span>
+          <button type="button" onclick="document.getElementById('import-file').click()" class="v3-icon-btn" title="Importer JSON">
+            <i class="ph-bold ph-upload-simple"></i>
           </button>
-          <button type="button" onclick="window.openResetModal()" class="btn-ghost hide-mobile" title="Vider ou réinitialiser">
-            <i class="ph ph-broom"></i> <span>Vider / Reset</span>
-          </button>
-          <button type="button" onclick="window.openSupabaseModal()" class="sync-status-pill" title="État de la synchronisation Cloud Supabase">
-            <span class="sync-dot sync-pending"></span>
-            <span id="header-sync-label" class="hide-mobile">Local-First</span>
-          </button>
-          <button type="button" onclick="window.exportJSON()" class="btn-ghost hide-mobile" title="Exporter JSON">
-            <i class="ph ph-download-simple"></i>
-          </button>
-          <button type="button" onclick="document.getElementById('import-file').click()" class="btn-ghost hide-mobile" title="Importer JSON">
-            <i class="ph ph-upload-simple"></i>
+          <button type="button" onclick="window.openResetModal()" class="v3-icon-btn" title="Vider ou réinitialiser">
+            <i class="ph-bold ph-broom"></i>
           </button>
           <input type="file" id="import-file" accept=".json" style="display:none;" onchange="window.importJSON(event)" />
         </div>
+
+        <button type="button" onclick="window.openMissionModal(null)" class="btn-primary v3-new-mission-cta hide-mobile">
+          <i class="ph-bold ph-plus"></i>
+          <span>Nouvelle mission</span>
+        </button>
+      </div>
+    </aside>
+
+    <!-- ========================================================== -->
+    <!-- V3 MAIN BENTO WORKSPACE                                    -->
+    <!-- ========================================================== -->
+    <main class="workspace v3-workspace">
+
+      <!-- Compact Context Bar -->
+      <header class="v3-context-header">
+        <div class="v3-context-titles">
+          <img src="icon.png" alt="Logo" class="header-logo only-mobile" onerror="this.style.display='none';" />
+          <div style="min-width:0;">
+            <div class="brand-name only-mobile" style="font-size:11px; margin-bottom:2px;">PCSI<span>.OS</span></div>
+            <h1 id="view-title" class="v3-view-title">Missions &amp; Cahier de Texte</h1>
+            <p id="view-subtitle" class="v3-view-subtitle">Priorisation dynamique selon l'échéance et la charge de travail</p>
+          </div>
+        </div>
+        <div class="v3-context-meta">
+          <button type="button" onclick="window.openSupabaseModal()" class="sync-status-pill" title="État de la synchronisation Cloud Supabase">
+            <span class="sync-dot sync-pending"></span>
+            <span id="header-sync-label">Local-First</span>
+          </button>
+          <button type="button" onclick="window.openSettingsSection()" class="btn-ghost hide-mobile" title="Paramètres de tension, rythme de soirée et matières">
+            <i class="ph-bold ph-gear-six"></i> <span>Paramètres</span>
+          </button>
+        </div>
       </header>
 
-      <!-- TAB 1 : MISSIONS -->
+      <!-- TAB 1 : MISSIONS (ASYMMETRIC BENTO SPLIT VIEW) -->
       <section id="tab-cahier" class="tab-view">
-        <div class="kpi-row" style="display:grid; grid-template-columns:repeat(auto-fit, minmax(210px, 1fr)); gap:14px; margin-bottom:20px;">
-          <div class="saas-card" style="padding:16px 18px;">
-            <div style="font-size:11px; font-weight:600; color:var(--text-subtle); text-transform:uppercase; margin-bottom:6px;">Urgences Critiques</div>
-            <div style="display:flex; align-items:baseline; justify-content:space-between;">
-              <span id="kpi-urgent" class="mono" style="font-size:24px; font-weight:700;">0</span>
-              <span style="font-size:11.5px; color:var(--text-muted);">Pression haute</span>
+        <div class="v3-bento-cahier-grid">
+
+          <!-- LEFT BENTO COLUMN: TELEMETRY + QUICK LAUNCHER + CPGE PORTALS -->
+          <div class="v3-bento-side-col">
+
+            <!-- Telemetry Bento Card (3 KPIs) -->
+            <div class="saas-card v3-telemetry-card">
+              <div class="v3-bento-card-head">
+                <span class="v3-bento-eyebrow"><i class="ph-bold ph-pulse"></i> Télémétrie Prépa</span>
+                <span class="mono" style="font-size:10.5px; color:var(--text-subtle);">LIVE</span>
+              </div>
+              <div class="kpi-row v3-kpi-grid">
+                <div class="v3-kpi-tile">
+                  <div class="v3-kpi-lbl">Urgences</div>
+                  <div id="kpi-urgent" class="mono v3-kpi-val" style="color:#FB7185;">0</div>
+                  <div class="v3-kpi-sub">Critiques</div>
+                </div>
+                <div class="v3-kpi-tile">
+                  <div class="v3-kpi-lbl">Volume</div>
+                  <div id="kpi-hours" class="mono v3-kpi-val" style="color:#38BDF8;">0h</div>
+                  <div class="v3-kpi-sub">Restant</div>
+                </div>
+                <div class="v3-kpi-tile">
+                  <div class="v3-kpi-lbl">Avancement</div>
+                  <div id="kpi-ratio" class="mono v3-kpi-val" style="color:#34D399;">0%</div>
+                  <div id="kpi-ratio-sub" class="v3-kpi-sub">0/0 validées</div>
+                </div>
+              </div>
             </div>
+
+            <!-- Quick-Add Studio Panel -->
+            <form onsubmit="window.quickAddMission(event)" class="saas-card qa-form v3-qa-studio">
+              <div class="v3-bento-card-head" style="margin-bottom:6px;">
+                <span class="v3-bento-eyebrow"><i class="ph-bold ph-lightning"></i> Ajout Rapide</span>
+                <button type="button" onclick="window.openMissionModal(null)" class="btn-ghost" style="padding:3px 8px; font-size:11px; border:none;">Mode avancé →</button>
+              </div>
+              <div id="qa-type-pills" class="qa-type-pills-bar"></div>
+              <input type="text" id="qa-title" class="saas-input" placeholder="Intitulé : DM Maths, TD Chimie, Colle..." required />
+              <div class="v3-qa-meta-row">
+                <div class="v3-qa-field-col" style="grid-column: 1 / -1;">
+                  <span class="v3-field-label">Matière</span>
+                  <div id="qa-subject-select"></div>
+                </div>
+                <label class="qa-field qa-dur v3-qa-field-col">
+                  <span class="v3-field-label">Durée (h)</span>
+                  <input type="number" id="qa-duration" class="saas-input mono" placeholder="1.5h" step="0.5" min="0.5" value="1.5" />
+                </label>
+                <label class="qa-field qa-date v3-qa-field-col">
+                  <span class="v3-field-label">Échéance</span>
+                  <input type="date" id="qa-duedate" class="saas-input mono" />
+                </label>
+              </div>
+              <button type="submit" class="btn-primary" style="width:100%; justify-content:center; padding:11px 16px; margin-top:4px;">
+                <i class="ph-bold ph-plus-circle"></i> Créer la mission
+              </button>
+            </form>
+
+            <!-- Quick Portals Bento Dock -->
+            <div class="saas-card v3-portals-mini-card hide-mobile">
+              <div class="v3-bento-card-head" style="margin-bottom:8px;">
+                <span class="v3-bento-eyebrow"><i class="ph-bold ph-compass"></i> Accès Rapide CPGE</span>
+                <button type="button" onclick="window.openPortalModal(null)" class="btn-ghost" style="padding:3px 7px; font-size:11px; border:none;" title="Ajouter un portail">
+                  <i class="ph-bold ph-plus"></i>
+                </button>
+              </div>
+              <div id="sidebar-portals-mount" class="v3-portals-chips-list"></div>
+            </div>
+
           </div>
-          <div class="saas-card" style="padding:16px 18px;">
-            <div style="font-size:11px; font-weight:600; color:var(--text-subtle); text-transform:uppercase; margin-bottom:6px;">Charge Restante</div>
-            <div style="display:flex; align-items:baseline; justify-content:space-between;">
-              <span id="kpi-hours" class="mono" style="font-size:24px; font-weight:700;">0h</span>
-              <span style="font-size:11.5px; color:var(--text-muted);">Volume estimé</span>
+
+          <!-- RIGHT BENTO COLUMN: MAIN MISSION STREAM & KANBAN -->
+          <div class="v3-bento-main-col">
+
+            <!-- Unified Control Bar (Filters + Sort + View Mode) -->
+            <div class="saas-card v3-stream-toolbar">
+              <div id="subject-filters" class="v3-subject-pills"></div>
+              <div class="v3-stream-controls">
+                <button type="button" id="toggle-tomorrow-first-btn" onclick="window.toggleTomorrowFirst()" class="btn-ghost active-pill" style="padding:6px 11px; font-size:11.5px;" title="Propulser les tâches dues demain tout en haut du backlog">
+                  <i class="ph-bold ph-fire"></i> <span>Demain d'abord</span>
+                </button>
+                <div class="v3-pill-group">
+                  <button type="button" onclick="window.setTaskSortMode('tension')" id="sort-tension-btn" class="btn-ghost active-pill" style="padding:5px 10px; font-size:11.5px; border:none;" title="Trier par Score de Tension">
+                    <i class="ph-bold ph-gauge"></i> Tension
+                  </button>
+                  <button type="button" onclick="window.setTaskSortMode('deadline')" id="sort-deadline-btn" class="btn-ghost" style="padding:5px 10px; font-size:11.5px; border:none;" title="Trier par proximité stricte de la date d'échéance">
+                    <i class="ph-bold ph-calendar-check"></i> Date
+                  </button>
+                </div>
+                <div class="v3-pill-group">
+                  <button type="button" onclick="window.setCahierMode('table')" id="mode-table-btn" class="btn-ghost" style="padding:5px 11px; font-size:11.5px; border:none;">
+                    <i class="ph-bold ph-list-bullets"></i> Liste
+                  </button>
+                  <button type="button" onclick="window.setCahierMode('kanban')" id="mode-kanban-btn" class="btn-ghost" style="padding:5px 11px; font-size:11.5px; border:none;">
+                    <i class="ph-bold ph-kanban"></i> Kanban
+                  </button>
+                </div>
+              </div>
             </div>
-          </div>
-          <div class="saas-card" style="padding:16px 18px;">
-            <div style="font-size:11px; font-weight:600; color:var(--text-subtle); text-transform:uppercase; margin-bottom:6px;">Taux d'Avancement</div>
-            <div style="display:flex; align-items:baseline; justify-content:space-between;">
-              <span id="kpi-ratio" class="mono" style="font-size:24px; font-weight:700;">0%</span>
-              <span id="kpi-ratio-sub" style="font-size:11.5px; color:var(--text-muted);">0/0 validées</span>
-            </div>
+
+            <!-- Tasks / Kanban Mount -->
+            <div id="tasks-render-area" class="v3-tasks-stream"></div>
+
           </div>
         </div>
-
-        <form onsubmit="window.quickAddMission(event)" class="saas-card qa-form" style="padding:12px 14px; margin-bottom:16px; display:flex; flex-wrap:wrap; align-items:center; gap:10px;">
-          <div id="qa-type-pills" class="qa-type-pills-bar"></div>
-          <input type="text" id="qa-title" class="saas-input" style="flex:1; min-width:190px;" placeholder="Ajout rapide : DM, TD, Préparation colle..." required />
-          <div id="qa-subject-select" style="width:155px;"></div>
-          <label class="qa-field qa-dur"><span class="qa-lbl">Durée (h)</span>
-            <input type="number" id="qa-duration" class="saas-input mono" style="width:84px;" placeholder="1.5h" step="0.5" min="0.5" value="1.5" />
-          </label>
-          <label class="qa-field qa-date"><span class="qa-lbl">Échéance</span>
-            <input type="date" id="qa-duedate" class="saas-input mono" style="width:140px;" />
-          </label>
-          <button type="submit" class="btn-primary">
-            <i class="ph-bold ph-plus"></i> Ajouter
-          </button>
-        </form>
-
-        <div style="display:flex; flex-wrap:wrap; justify-content:space-between; align-items:center; gap:12px; margin-bottom:16px;">
-          <div id="subject-filters" style="display:flex; flex-wrap:wrap; gap:6px;"></div>
-          <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
-            <!-- BOUTON PRIORITÉ DEMAIN -->
-            <button type="button" id="toggle-tomorrow-first-btn" onclick="window.toggleTomorrowFirst()" class="btn-ghost active-pill" style="padding:5px 10px; font-size:11.5px;" title="Propulser les tâches dues demain tout en haut du backlog">
-              <i class="ph-bold ph-fire"></i> <span>Demain d'abord</span>
-            </button>
-            <!-- SÉLECTEUR DE TRI : TENSION vs DEADLINE -->
-            <div style="display:flex; gap:3px; background:rgba(255,255,255,0.03); padding:3px; border-radius:10px; border:1px solid var(--border-subtle);">
-              <button type="button" onclick="window.setTaskSortMode('tension')" id="sort-tension-btn" class="btn-ghost active-pill" style="padding:5px 10px; font-size:11.5px; border:none;" title="Trier par Score de Tension">
-                <i class="ph-bold ph-gauge"></i> Score de Tension
-              </button>
-              <button type="button" onclick="window.setTaskSortMode('deadline')" id="sort-deadline-btn" class="btn-ghost" style="padding:5px 10px; font-size:11.5px; border:none;" title="Trier par proximité stricte de la date d'échéance">
-                <i class="ph-bold ph-calendar-check"></i> Délai Strict
-              </button>
-            </div>
-            <!-- VUE LISTE vs KANBAN -->
-            <div style="display:flex; gap:4px; background:rgba(255,255,255,0.03); padding:3px; border-radius:10px; border:1px solid var(--border-subtle);">
-              <button type="button" onclick="window.setCahierMode('table')" id="mode-table-btn" class="btn-ghost" style="padding:5px 11px; font-size:12px; border:none;">
-                <i class="ph ph-list-bullets"></i> Liste
-              </button>
-              <button type="button" onclick="window.setCahierMode('kanban')" id="mode-kanban-btn" class="btn-ghost" style="padding:5px 11px; font-size:12px; border:none;">
-                <i class="ph ph-kanban"></i> Kanban
-              </button>
-            </div>
-          </div>
-        </div>
-
-        <div id="tasks-render-area"></div>
       </section>
 
       <!-- TAB 2 : AGENDA (DOUBLE VUE : GRILLE ACADÉMIQUE & PLANNING SOIRÉE) -->
       <section id="tab-agenda" class="tab-view" style="display:none;">
-        <div class="saas-card agenda-bar" style="padding:16px 20px; margin-bottom:18px; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:14px;">
-          <div style="display:flex; align-items:center; gap:14px; flex-wrap:wrap;">
-            <!-- DOUBLE ONGLET AGENDA -->
-            <div style="display:flex; gap:4px; background:rgba(255,255,255,0.035); padding:4px; border-radius:11px; border:1px solid var(--border-subtle);">
-              <button type="button" id="agenda-tab-academic-btn" onclick="window.setAgendaSubTab('academic')" class="btn-ghost active-pill" style="padding:6px 13px; font-size:12.5px; border:none;">
+        <div class="saas-card agenda-bar v3-agenda-command-bar">
+          <div style="display:flex; align-items:center; gap:12px; flex-wrap:wrap;">
+            <div class="v3-pill-group">
+              <button type="button" id="agenda-tab-academic-btn" onclick="window.setAgendaSubTab('academic')" class="btn-ghost active-pill" style="padding:7px 14px; font-size:12.5px; border:none;">
                 <i class="ph-bold ph-calendar-blank"></i> Grille Académique
               </button>
-              <button type="button" id="agenda-tab-evening-btn" onclick="window.setAgendaSubTab('evening')" class="btn-ghost" style="padding:6px 13px; font-size:12.5px; border:none;">
+              <button type="button" id="agenda-tab-evening-btn" onclick="window.setAgendaSubTab('evening')" class="btn-ghost" style="padding:7px 14px; font-size:12.5px; border:none;">
                 <i class="ph-bold ph-moon-stars"></i> Planning Soirée (17h → Coucher)
               </button>
             </div>
           </div>
 
-          <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
-            <div class="week-nav" style="display:flex; align-items:center; background:rgba(255,255,255,0.025); border:1px solid var(--border-subtle); border-radius:10px; padding:3px; margin-right:4px;">
-              <button type="button" onclick="window.prevWeek()" class="btn-ghost" style="padding:5px 8px; border:none;" title="Semaine précédente"><i class="ph-bold ph-caret-left"></i></button>
-              <span id="agenda-week-label" style="font-size:12px; font-weight:600; padding:0 12px; color:var(--text-main); cursor:pointer;" onclick="window.currentWeek()" title="Revenir à aujourd'hui">Semaine du --/--</span>
-              <button type="button" onclick="window.nextWeek()" class="btn-ghost" style="padding:5px 8px; border:none;" title="Semaine suivante"><i class="ph-bold ph-caret-right"></i></button>
+          <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
+            <div class="week-nav v3-week-stepper">
+              <button type="button" onclick="window.prevWeek()" class="btn-ghost" style="padding:5px 9px; border:none;" title="Semaine précédente"><i class="ph-bold ph-caret-left"></i></button>
+              <span id="agenda-week-label" style="font-size:12.5px; font-weight:600; padding:0 12px; color:var(--text-main); cursor:pointer;" onclick="window.currentWeek()" title="Revenir à aujourd'hui">Semaine du --/--</span>
+              <button type="button" onclick="window.nextWeek()" class="btn-ghost" style="padding:5px 9px; border:none;" title="Semaine suivante"><i class="ph-bold ph-caret-right"></i></button>
             </div>
             <div id="agenda-academic-controls" style="display:flex; gap:8px; align-items:center;">
-              <button type="button" onclick="window.openSlotModal(null)" class="btn-primary hide-mobile">
-                <i class="ph-bold ph-plus"></i> Ajouter un créneau
-              </button>
               <button type="button" onclick="window.openScheduleImportModal('files')" class="btn-ghost hide-mobile">
-                <i class="ph-bold ph-file-pdf"></i> Colloscope / Import (Photo, PDF)
+                <i class="ph-bold ph-sparkle" style="color:#38BDF8;"></i> Colloscope / Import IA
                 <span id="agenda-docs-count-badge" class="mono" style="display:none; font-size:10.5px; padding:1px 6px; border-radius:99px; background:rgba(56,189,248,0.18); color:#38BDF8; border:1px solid rgba(56,189,248,0.4);">0</span>
+              </button>
+              <button type="button" onclick="window.openSlotModal(null)" class="btn-primary hide-mobile">
+                <i class="ph-bold ph-plus"></i> Nouveau créneau
               </button>
             </div>
           </div>
         </div>
-        <div class="saas-card" style="padding:18px; overflow-x:auto;" id="calendar-grid-box"></div>
+        <div class="saas-card v3-calendar-surface" id="calendar-grid-box"></div>
         <div class="agenda-tools mobile-block">
           <button type="button" onclick="window.openSlotModal(null)" class="btn-primary"><i class="ph-bold ph-plus"></i> Ajouter un créneau</button>
           <button type="button" onclick="window.openScheduleImportModal('files')" class="btn-ghost"><i class="ph-bold ph-file-pdf"></i> Photo / PDF / Colloscope <span id="agenda-docs-mobile-badge" class="mono" style="display:none; font-size:10px; padding:1px 5px; border-radius:99px; background:rgba(56,189,248,0.2); color:#38BDF8; margin-left:4px;">0</span></button>
@@ -254,19 +277,22 @@
 
       <!-- TAB 3 : POST-ITS -->
       <section id="tab-postits" class="tab-view" style="display:none;">
-        <div class="saas-card" style="padding:18px 20px; margin-bottom:20px; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:14px;">
-          <div>
-            <h2 style="font-size:15.5px; font-weight:700;">Mur d'Erreurs &amp; Pièges Classiques</h2>
-            <p style="font-size:12px; color:var(--text-muted);">Glisse-dépose les post-its pour les réorganiser avant un DS</p>
+        <div class="saas-card v3-postit-toolbar">
+          <div style="display:flex; align-items:center; gap:12px;">
+            <span class="v3-section-icon"><i class="ph-bold ph-note-pencil"></i></span>
+            <div>
+              <h2 style="font-size:15px; font-weight:700;">Mur d'Erreurs &amp; Pièges Classiques</h2>
+              <p style="font-size:12px; color:var(--text-muted);">Fiches réflexes repositionnables à relire avant chaque épreuve</p>
+            </div>
           </div>
           <div style="display:flex; flex-wrap:wrap; gap:8px; align-items:center;">
             <div id="postit-subj-filter-mount" style="width:165px;"></div>
             <div id="postit-type-filter-mount" style="width:165px;"></div>
-            <button type="button" onclick="window.openErrorTypesModal()" class="btn-ghost"><i class="ph ph-tag"></i> Gérer types</button>
+            <button type="button" onclick="window.openErrorTypesModal()" class="btn-ghost"><i class="ph-bold ph-tag"></i> Catégories</button>
             <button type="button" onclick="window.openPostitModal(null)" class="btn-primary"><i class="ph-bold ph-plus"></i> Nouveau post-it</button>
           </div>
         </div>
-        <div id="postit-wall" style="display:grid; grid-template-columns:repeat(auto-fill, minmax(225px, 1fr)); gap:24px; padding:10px;"></div>
+        <div id="postit-wall" class="v3-postit-grid"></div>
       </section>
 
       <!-- TAB 4 : DAILY DROP (ENGLISH & CULTURE G HUB) -->
@@ -276,50 +302,52 @@
 
       <!-- TAB 5 : SITES & RÉGLAGES -->
       <section id="tab-sites" class="tab-view" style="display:none;">
-        
-        <div class="section-label" style="margin-bottom:12px;">Paramètres du Cockpit &amp; Personnalisation</div>
-        <div id="settings-panel-mount" style="margin-bottom:28px;"></div>
-
-        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
-          <div class="section-label" style="margin:0;">Portails CPGE</div>
-          <button type="button" onclick="window.openPortalModal(null)" class="btn-primary" style="padding:6px 12px; font-size:12px;">
-            <i class="ph-bold ph-plus"></i> Ajouter un lien
+        <div class="v3-settings-bento-head">
+          <div>
+            <div class="section-label" style="margin:0 0 4px 0;">Portails &amp; Ressources</div>
+            <p style="font-size:12.5px; color:var(--text-muted);">Accès direct à vos plateformes CPGE, cahiers de prépa et banques de concours</p>
+          </div>
+          <button type="button" onclick="window.openPortalModal(null)" class="btn-primary" style="padding:7px 14px; font-size:12.5px;">
+            <i class="ph-bold ph-plus"></i> Ajouter un portail
           </button>
         </div>
-        
-        <!-- LIENS DYNAMIQUES -->
-        <div id="sites-grid-mount" class="sites-grid"></div>
 
-        <div class="section-label" style="margin-top:28px;">Données &amp; synchronisation</div>
+        <!-- LIENS DYNAMIQUES -->
+        <div id="sites-grid-mount" class="sites-grid" style="margin-bottom:28px;"></div>
+
+        <div class="section-label" style="margin-bottom:12px;">Calibration du Cockpit &amp; Personnalisation</div>
+        <div id="settings-panel-mount" style="margin-bottom:28px;"></div>
+
+        <div class="section-label" style="margin-top:28px; margin-bottom:12px;">Synchronisation Cloud &amp; Sauvegardes</div>
         <div class="sites-grid">
           <button type="button" onclick="window.syncNowSupabase()" class="saas-card site-card">
-            <span class="site-ico"><i class="ph ph-arrows-clockwise"></i></span>
-            <span class="site-txt"><b>Synchroniser</b><small>Envoyer / récupérer depuis le cloud</small></span>
+            <span class="site-ico"><i class="ph-bold ph-arrows-clockwise"></i></span>
+            <span class="site-txt"><b>Synchroniser maintenant</b><small>Envoyer / récupérer depuis le cloud</small></span>
             <span class="sync-dot sync-pending"></span>
           </button>
           <button type="button" onclick="window.openSupabaseModal()" class="saas-card site-card">
-            <span class="site-ico"><i class="ph ph-cloud-arrow-up"></i></span>
-            <span class="site-txt"><b>Gérer la connexion</b><small>Changer d'identifiant (Sync ID)</small></span>
+            <span class="site-ico"><i class="ph-bold ph-cloud-arrow-up"></i></span>
+            <span class="site-txt"><b>Gérer la connexion Cloud</b><small>Configurer l'identifiant (Sync ID)</small></span>
           </button>
           <button type="button" onclick="window.openScheduleImportModal()" class="saas-card site-card">
-            <span class="site-ico"><i class="ph ph-calendar-plus"></i></span>
-            <span class="site-txt"><b>Ingérer Planning / Colloscope</b><small>Coller du texte libre ou du JSON</small></span>
+            <span class="site-ico"><i class="ph-bold ph-calendar-plus"></i></span>
+            <span class="site-txt"><b>Ingérer Planning / Colloscope</b><small>Photo, PDF, texte libre ou JSON</small></span>
           </button>
           <button type="button" onclick="window.exportJSON()" class="saas-card site-card">
-            <span class="site-ico"><i class="ph ph-download-simple"></i></span>
+            <span class="site-ico"><i class="ph-bold ph-download-simple"></i></span>
             <span class="site-txt"><b>Exporter en JSON</b><small>Sauvegarde locale complète</small></span>
           </button>
           <button type="button" onclick="document.getElementById('import-file').click()" class="saas-card site-card">
-            <span class="site-ico"><i class="ph ph-upload-simple"></i></span>
-            <span class="site-txt"><b>Importer un JSON</b><small>Restaurer une sauvegarde locale</small></span>
+            <span class="site-ico"><i class="ph-bold ph-upload-simple"></i></span>
+            <span class="site-txt"><b>Importer un JSON</b><small>Restaurer une archive locale</small></span>
           </button>
           <button type="button" onclick="window.openOnboardingModal()" class="saas-card site-card">
-            <span class="site-ico"><i class="ph ph-sparkle"></i></span>
-            <span class="site-txt"><b>Revoir le tutoriel</b><small>Présentation rapide du Cockpit</small></span>
+            <span class="site-ico"><i class="ph-bold ph-sparkle"></i></span>
+            <span class="site-txt"><b>Guide de démarrage</b><small>Présentation rapide du Cockpit</small></span>
           </button>
-          <button type="button" onclick="window.openResetModal()" class="saas-card site-card" style="color:#F87171;">
-            <span class="site-ico" style="color:#F87171;"><i class="ph ph-broom"></i></span>
-            <span class="site-txt"><b>Vider / Reset</b><small>Nettoyage et remise à zéro</small></span>
+          <button type="button" onclick="window.openResetModal()" class="saas-card site-card" style="color:#FB7185;">
+            <span class="site-ico" style="color:#FB7185;"><i class="ph-bold ph-broom"></i></span>
+            <span class="site-txt"><b>Vider / Réinitialiser</b><small>Nettoyage sélectif ou remise à zéro</small></span>
           </button>
         </div>
       </section>

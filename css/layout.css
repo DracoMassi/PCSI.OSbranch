@@ -1,87 +1,423 @@
-/* layout.css : grille de l'app Glassmorphism V2, sidebar flottante style macOS/iPadOS, zone de travail */
-.app-shell {
-  display: grid;
-  grid-template-columns: 268px minmax(0, 1fr);
+/* layout.css : Architecture V3 — Top Floating Command Dock & Bento Split Workspace */
+.app-shell,
+.app-shell.v3-bento-shell,
+.app-shell.sidebar-collapsed {
+  display: flex;
+  flex-direction: column;
   min-height: 100vh;
   min-height: 100dvh;
   position: relative;
   z-index: 10;
-  padding: 16px;
-  gap: 20px;
-  max-width: 1720px;
+  max-width: 1640px;
+  width: 100%;
   margin: 0 auto;
-  transition: grid-template-columns 0.3s cubic-bezier(0.16, 1, 0.3, 1);
-}
-.app-shell.sidebar-collapsed {
-  grid-template-columns: 80px minmax(0, 1fr);
+  padding: 16px 24px 44px;
+  gap: 18px;
 }
 
-.sidebar {
-  background: linear-gradient(175deg, rgba(255, 255, 255, 0.08) 0%, rgba(14, 18, 28, 0.58) 100%);
+/* ==========================================================
+   TOP FLOATING COMMAND DOCK (REPLACES VERTICAL SIDEBAR)
+   ========================================================== */
+.sidebar.v3-top-dock {
+  position: sticky;
+  top: 14px;
+  z-index: 110;
+  width: 100%;
+  height: auto;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 10px 16px;
+  border-radius: 24px;
+  background: linear-gradient(165deg, rgba(28, 35, 52, 0.72) 0%, rgba(12, 16, 26, 0.84) 100%);
   backdrop-filter: var(--glass-blur-heavy);
   -webkit-backdrop-filter: var(--glass-blur-heavy);
-  border: 1px solid var(--border-glass);
-  border-radius: 26px;
-  box-shadow: 0 24px 60px -12px rgba(0, 0, 0, 0.65), inset 0 1px 0 rgba(255, 255, 255, 0.22);
-  padding: 20px 14px;
-  display: flex;
-  flex-direction: column;
-  justify-content: space-between;
-  position: sticky;
-  top: 16px;
-  height: calc(100vh - 32px);
-  height: calc(100dvh - 32px);
-  z-index: 50;
-  overflow-y: auto;
-  scrollbar-width: none;
-  -ms-overflow-style: none;
-  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  box-shadow: 0 22px 50px -12px rgba(0, 0, 0, 0.68), inset 0 1px 0 rgba(255, 255, 255, 0.24);
+  overflow: visible;
 }
-.sidebar::-webkit-scrollbar { display: none; }
 
-.nav-item {
+.v3-dock-brand {
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+}
+.v3-brand-badge {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  padding: 2px 6px 2px 2px;
+}
+
+/* Center Segmented Pill Navigation */
+.v3-segmented-nav {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px;
+  border-radius: 16px;
+  background: rgba(6, 9, 15, 0.55);
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  box-shadow: inset 0 2px 6px rgba(0, 0, 0, 0.45);
+}
+
+.v3-segmented-nav .nav-item {
+  width: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 15px;
+  border-radius: 12px;
+  color: var(--text-muted);
+  font-size: 13px;
+  font-weight: 500;
+  white-space: nowrap;
+  border: 1px solid transparent;
+  background: transparent;
+  cursor: pointer;
+  transition: all 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.v3-segmented-nav .nav-item i {
+  font-size: 16px;
+  transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.v3-segmented-nav .nav-item:hover {
+  color: var(--text-main);
+  background: rgba(255, 255, 255, 0.05);
+}
+.v3-segmented-nav .nav-item.active {
+  color: #FFFFFF;
+  font-weight: 600;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.18) 0%, rgba(255, 255, 255, 0.08) 100%);
+  border-color: rgba(255, 255, 255, 0.22);
+  box-shadow: 0 6px 16px -4px rgba(0, 0, 0, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.3);
+}
+
+/* Right Actions in Top Dock */
+.v3-dock-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+}
+
+.v3-sync-capsule {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 5px 8px 5px 12px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.045);
+  border: 1px solid rgba(255, 255, 255, 0.11);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
+}
+.v3-sync-text {
+  font-size: 11px;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.v3-quick-tools {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 3px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.035);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.v3-icon-btn {
+  width: 30px;
+  height: 30px;
+  border-radius: 9px;
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14.5px;
+  cursor: pointer;
+  transition: all 0.18s ease;
+}
+.v3-icon-btn:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: #FFFFFF;
+}
+
+.v3-new-mission-cta {
+  padding: 9px 16px;
+  border-radius: 14px;
+  font-size: 13px;
+}
+
+/* ==========================================================
+   MAIN WORKSPACE & CONTEXT HEADER
+   ========================================================== */
+.workspace.v3-workspace {
+  padding: 0;
+  max-width: 100%;
+  width: 100%;
+  min-width: 0;
+  margin: 0;
+}
+
+.v3-context-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+  padding: 6px 6px 14px;
+  margin-bottom: 10px;
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+.v3-context-titles {
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 11px 14px;
-  border-radius: 14px;
-  color: var(--text-muted);
-  font-size: 13.5px;
-  font-weight: 500;
-  text-decoration: none;
-  transition: all 0.22s cubic-bezier(0.16, 1, 0.3, 1);
-  background: transparent;
-  border: 1px solid transparent;
-  width: 100%;
-  cursor: pointer;
-  text-align: left;
-  letter-spacing: -0.01em;
+  min-width: 0;
 }
-.nav-item i {
-  font-size: 18px;
-  transition: transform 0.22s cubic-bezier(0.16, 1, 0.3, 1), color 0.2s ease;
-}
-.nav-item:hover {
-  background: rgba(255, 255, 255, 0.065);
-  color: var(--text-main);
-}
-.nav-item:hover i {
-  transform: scale(1.08);
-}
-.nav-item.active {
-  background: linear-gradient(135deg, rgba(255, 255, 255, 0.16) 0%, rgba(255, 255, 255, 0.07) 100%);
+.v3-view-title {
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: -0.025em;
   color: #FFFFFF;
-  border-color: rgba(255, 255, 255, 0.22);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.28), 0 8px 20px -4px rgba(0, 0, 0, 0.35);
-  font-weight: 600;
+  line-height: 1.2;
+}
+.v3-view-subtitle {
+  font-size: 13px;
+  color: var(--text-muted);
+  margin-top: 2px;
+}
+.v3-context-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
-.workspace {
-  padding: 12px 16px 36px 12px;
-  max-width: 1400px;
-  width: 100%;
+/* ==========================================================
+   TAB 1: ASYMMETRIC BENTO SPLIT LAYOUT (COCKPIT + STREAM)
+   ========================================================== */
+.v3-bento-cahier-grid {
+  display: grid;
+  grid-template-columns: 360px minmax(0, 1fr);
+  gap: 20px;
+  align-items: start;
+}
+
+.v3-bento-side-col {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  position: sticky;
+  top: 90px;
+}
+
+.v3-bento-main-col {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
   min-width: 0;
-  margin: 0 auto;
+}
+
+.v3-bento-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+.v3-bento-eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
+}
+.v3-bento-eyebrow i {
+  color: #38BDF8;
+  font-size: 13.5px;
+}
+
+/* Telemetry Bento Card */
+.v3-telemetry-card {
+  padding: 18px;
+}
+.kpi-row.v3-kpi-grid {
+  display: grid !important;
+  grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+  gap: 10px !important;
+  margin-bottom: 0 !important;
+}
+.v3-kpi-tile {
+  background: rgba(255, 255, 255, 0.035);
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  border-radius: 16px;
+  padding: 12px 10px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
+}
+.v3-kpi-lbl {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-subtle);
+}
+.v3-kpi-val {
+  font-size: 22px !important;
+  font-weight: 700;
+  line-height: 1.15;
+  letter-spacing: -0.03em;
+}
+.v3-kpi-sub {
+  font-size: 10.5px;
+  color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+}
+
+/* Quick-Add Studio Card */
+.qa-form.v3-qa-studio {
+  padding: 18px !important;
+  margin-bottom: 0 !important;
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: stretch !important;
+  gap: 12px !important;
+}
+.v3-qa-meta-row {
+  display: grid;
+  grid-template-columns: 1fr 1.25fr;
+  gap: 10px;
+}
+.v3-qa-field-col {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  min-width: 0;
+}
+.v3-field-label {
+  font-size: 10.5px;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+/* Mini Portals Dock Card */
+.v3-portals-mini-card {
+  padding: 16px 18px;
+}
+.v3-portals-chips-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+/* Right Column Stream Toolbar */
+.v3-stream-toolbar {
+  padding: 12px 16px;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+}
+.v3-subject-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.v3-stream-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.v3-pill-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 3px;
+  border-radius: 12px;
+  background: rgba(6, 9, 15, 0.5);
+  border: 1px solid rgba(255, 255, 255, 0.09);
+}
+
+/* Agenda & Post-its V3 Surfaces */
+.v3-agenda-command-bar {
+  padding: 14px 18px;
+  margin-bottom: 16px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 14px;
+}
+.v3-week-stepper {
+  display: inline-flex;
+  align-items: center;
+  background: rgba(6, 9, 15, 0.5);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+  padding: 3px;
+}
+.v3-calendar-surface {
+  padding: 18px;
+  overflow-x: auto;
+}
+.v3-postit-toolbar {
+  padding: 16px 20px;
+  margin-bottom: 20px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 14px;
+}
+.v3-section-icon {
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  background: rgba(56, 189, 248, 0.12);
+  border: 1px solid rgba(56, 189, 248, 0.28);
+  color: #38BDF8;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 19px;
+  flex-shrink: 0;
+}
+.v3-postit-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(235px, 1fr));
+  gap: 22px;
+  padding: 6px;
+}
+.v3-settings-bento-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 14px;
 }
 
 .sync-status-pill {
