@@ -617,6 +617,8 @@ function extractJsonSlotsFromAiResponse(rawText) {
 
 const AI_MAX_PAGES = 3;
 const AI_CACHE_MAX = 10;
+// Limite Vercel : 4,5 Mo de corps de requête. Les images sont en base64 (1 caractère = 1 octet) : marge pour le prompt.
+const AI_SERVER_MAX_BYTES = 3.8 * 1024 * 1024;
 
 // Empreinte d'un document + consigne : évite de relancer (et de payer en quota) la même analyse.
 async function hashForAiCache(str) {
@@ -649,32 +651,47 @@ function setAiCache(key, text) {
 async function callVisionAiProviders(doc, promptText) {
   const images = (doc.pages || []).slice(0, AI_MAX_PAGES);
   const localKey = (state.settings && state.settings.aiApiKey) ? state.settings.aiApiKey.trim() : '';
-  let netlifyErrorMsg = '';
+  let serverErrorMsg = '';
 
-  // 1. Appel prioritaire à la fonction Serverless Netlify (/.netlify/functions/ai-schedule)
-  // Les clés Gemini (GEMINI_API_KEY_1, GEMINI_API_KEY_2...) sont stockées côté serveur sur Netlify :
+  // 1. Appel prioritaire à la fonction serverless Vercel (/api/ai-schedule)
+  // Les clés Gemini (GEMINI_API_KEY_1, GEMINI_API_KEY_2...) sont stockées côté serveur sur Vercel :
   // invisibles pour les utilisateurs, avec rotation automatique et aucun réglage requis.
+  // Vercel refuse les corps > 4,5 Mo : on retire des pages (en gardant les premières) pour rester sous la limite.
+  const serverImages = [];
+  let serverBytes = 0;
+  for (const img of images) {
+    const size = String(img || '').length;
+    if (serverImages.length && serverBytes + size > AI_SERVER_MAX_BYTES) break;
+    serverImages.push(img);
+    serverBytes += size;
+  }
+  if (serverImages.length < images.length) {
+    showToast(`Document volumineux : seules ${serverImages.length} page(s) sur ${images.length} sont envoyées à l'IA`);
+  }
+
   try {
-    const netlifyRes = await fetch('/.netlify/functions/ai-schedule', {
+    const serverRes = await fetch('/api/ai-schedule', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         prompt: promptText,
-        images
+        images: serverImages
       })
     });
-    if (netlifyRes.ok) {
-      const data = await netlifyRes.json();
+    if (serverRes.ok) {
+      const data = await serverRes.json();
       if (data && data.text) return data.text;
-    } else if (netlifyRes.status !== 404) {
-      const errData = await netlifyRes.json().catch(() => ({}));
-      netlifyErrorMsg = errData.error || `Erreur serveur IA (${netlifyRes.status})`;
+    } else if (serverRes.status === 413) {
+      serverErrorMsg = 'Document trop volumineux pour le serveur (4 Mo max) : prends une photo moins lourde ou une seule page.';
+    } else if (serverRes.status !== 404) {
+      const errData = await serverRes.json().catch(() => ({}));
+      serverErrorMsg = errData.error || `Erreur serveur IA (${serverRes.status})`;
     }
   } catch (e) {
-    // En mode local hors Netlify, bascule transparente ci-dessous
+    // En mode local sans serveur (python -m http.server), bascule transparente ci-dessous
   }
 
-  // 2. Si une clé Gemini locale est présente (mode local hors Netlify), appeler l'API Gemini directement
+  // 2. Si une clé Gemini locale est présente (mode local hors Vercel), appeler l'API Gemini directement
   if (localKey) {
     const imageParts = [];
     images.forEach(dataUrl => {
@@ -706,10 +723,10 @@ async function callVisionAiProviders(doc, promptText) {
     }
   }
 
-  if (netlifyErrorMsg) {
-    throw new Error(netlifyErrorMsg);
+  if (serverErrorMsg) {
+    throw new Error(serverErrorMsg);
   }
-  throw new Error('Redéploie ton site sur Netlify (ou pousse la mise à jour sur GitHub) pour activer tes clés GEMINI_API_KEY_1.');
+  throw new Error('Fonction IA introuvable : vérifie que GEMINI_API_KEY_1 est définie dans les variables Vercel, puis redéploie le site.');
 }
 
 window.analyzeStagedDocWithAI = async function() {

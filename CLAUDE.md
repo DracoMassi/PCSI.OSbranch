@@ -32,5 +32,12 @@ Cockpit de prépa PCSI : missions, emploi du temps, mur d'erreurs, portails. Fro
 ## Pression (`computePressure` dans `missions.js`)
 Constantes `WORK_H_PER_DAY`, `LOAD_GAIN`, `URGENCY_MAX`, `URGENCY_DECAY` ; score 0–100 → couleur HSL vert→rouge ; `RETARD` si échéance passée.
 
+## Déploiement / IA (Vercel)
+- Hébergement Vercel (statique, sans build). `api/ai-schedule.js` = fonction Node (`POST /api/ai-schedule`), config dans `vercel.json`.
+- Env Vercel : `GEMINI_API_KEY_1…`, `GEMINI_MODELS` (optionnel), `ALLOWED_ORIGIN` (optionnel). Redéployer après modification.
+- Corps de requête max 4,5 Mo (Vercel) : `callVisionAiProviders` tronque les pages (`AI_SERVER_MAX_BYTES`).
+- `aiApiKey` et `aiCache` (réglages) restent locaux : exclus de la sync Supabase et de l'export (`LOCAL_ONLY_SETTINGS` dans `sync.js`).
+- Créneaux IA : champ illisible = `null` + `incomplete: true` ; ignorés à l'import.
+
 ## Assets attendus à la racine (optionnels)
 `logo-ens.png`, `icon-192.png`, `icon-180.png`, `manifest.webmanifest`.

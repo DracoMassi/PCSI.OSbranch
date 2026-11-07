@@ -1,13 +1,15 @@
-// netlify/functions/ai-schedule.js
-// Fonction Serverless Netlify : conversion visuelle Photo/PDF -> Emploi du temps JSON
+// api/ai-schedule.js
+// Fonction Vercel (Node.js) : conversion visuelle Photo/PDF -> Emploi du temps JSON
+// Route : POST /api/ai-schedule
 //
-// Variables d'environnement Netlify :
+// Variables d'environnement Vercel (Project Settings > Environment Variables, puis redéployer) :
 //   GEMINI_API_KEY, GEMINI_API_KEY_1, GEMINI_KEY_2, ... : clés Gemini (une ou plusieurs par variable, séparées par , ; ou espace)
-//   ALLOWED_ORIGIN : origines autorisées, séparées par des virgules (ex: https://mon-site.netlify.app).
-//                    Vide = aucun en-tête CORS (appels same-origin uniquement).
 //   GEMINI_MODELS  : modèles essayés dans l'ordre, séparés par des virgules (défaut ci-dessous).
+//   ALLOWED_ORIGIN : (optionnel) origines supplémentaires autorisées, séparées par des virgules
+//                    (ex: https://mon-domaine.fr). Le site lui-même (même hôte) est toujours autorisé.
 
-const MAX_BODY_BYTES = 6 * 1024 * 1024;
+// Vercel refuse les corps > 4,5 Mo (413) avant même d'appeler la fonction : on garde une marge.
+const MAX_BODY_BYTES = 4 * 1024 * 1024;
 const MAX_IMAGES = 3;
 const MAX_PROMPT_CHARS = 8000;
 const MAX_ATTEMPTS = 4;
@@ -77,46 +79,63 @@ function buildImageParts(images) {
   return parts;
 }
 
-exports.handler = async function(event) {
+// Même origine que le site (hôte de la requête) ou origine listée dans ALLOWED_ORIGIN.
+function isOriginAllowed(origin, host, allowedOrigins) {
+  if (!origin) return true; // appel same-origin sans en-tête Origin (GET/HEAD) ou client non navigateur
+  if (allowedOrigins.includes(origin)) return true;
+  try {
+    return !!host && new URL(origin).host === host;
+  } catch (e) {
+    return false;
+  }
+}
+
+module.exports = async function handler(req, res) {
   const env = process.env || {};
   const allowedOrigins = parseList(env.ALLOWED_ORIGIN);
-  const origin = (event.headers && (event.headers.origin || event.headers.Origin)) || '';
-  const originAllowed = allowedOrigins.includes(origin);
+  const origin = String(req.headers.origin || '');
+  const host = String(req.headers['x-forwarded-host'] || req.headers.host || '');
+  const originAllowed = isOriginAllowed(origin, host, allowedOrigins);
 
-  const headers = {
-    'Access-Control-Allow-Headers': 'Content-Type',
-    'Access-Control-Allow-Methods': 'POST, OPTIONS',
-    'Content-Type': 'application/json',
-    'Vary': 'Origin'
+  res.setHeader('Content-Type', 'application/json');
+  res.setHeader('Vary', 'Origin');
+  res.setHeader('Cache-Control', 'no-store');
+  // En-têtes CORS uniquement pour une origine explicitement listée (le same-origin n'en a pas besoin).
+  if (origin && allowedOrigins.includes(origin)) {
+    res.setHeader('Access-Control-Allow-Origin', origin);
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+    res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
+  }
+
+  const reply = (statusCode, payload) => {
+    res.status(statusCode);
+    if (payload === undefined) res.end(); else res.send(JSON.stringify(payload));
   };
-  if (originAllowed) headers['Access-Control-Allow-Origin'] = origin;
 
-  const reply = (statusCode, payload) => ({ statusCode, headers, body: payload === undefined ? '' : JSON.stringify(payload) });
-
-  if (event.httpMethod === 'OPTIONS') {
+  if (req.method === 'OPTIONS') {
     return reply(originAllowed ? 204 : 403);
   }
-  if (event.httpMethod !== 'POST') {
+  if (req.method !== 'POST') {
     return reply(405, { error: 'Method Not Allowed' });
   }
-
-  // Un navigateur envoie toujours Origin sur un POST : s'il est présent et non autorisé, on refuse.
-  // (Atténuation seulement : un client non-navigateur peut forger cet en-tête.)
-  if (allowedOrigins.length && origin && !originAllowed) {
+  // Atténuation seulement : un client non-navigateur peut forger l'en-tête Origin.
+  if (!originAllowed) {
     return reply(403, { error: 'Origine non autorisée' });
   }
 
-  const rawBody = event.isBase64Encoded
-    ? Buffer.from(event.body || '', 'base64').toString('utf8')
-    : (event.body || '');
-  if (Buffer.byteLength(rawBody, 'utf8') > MAX_BODY_BYTES) {
-    return reply(413, { error: 'Document trop volumineux' });
+  const declaredLength = parseInt(req.headers['content-length'] || '0', 10);
+  if (declaredLength > MAX_BODY_BYTES) {
+    return reply(413, { error: 'Document trop volumineux (4 Mo max)' });
   }
 
+  // Vercel analyse le JSON dans req.body ; l'accès peut lever une erreur si le JSON est invalide.
   let body;
   try {
-    body = JSON.parse(rawBody || '{}');
+    body = typeof req.body === 'string' ? JSON.parse(req.body || '{}') : (req.body || {});
   } catch (e) {
+    return reply(400, { error: 'Requête JSON invalide' });
+  }
+  if (!body || typeof body !== 'object') {
     return reply(400, { error: 'Requête JSON invalide' });
   }
 
@@ -134,7 +153,7 @@ exports.handler = async function(event) {
   const apiKeys = shuffle(collectApiKeys(env));
   if (!apiKeys.length) {
     return reply(503, {
-      error: 'Aucune clé Gemini active sur ce déploiement. Ajoute GEMINI_API_KEY_1 dans Netlify puis redéploie le site.'
+      error: 'Aucune clé Gemini active sur ce déploiement. Ajoute GEMINI_API_KEY_1 dans les variables d\'environnement Vercel puis redéploie le site.'
     });
   }
 
