@@ -1,27 +1,33 @@
 /* base.css : variables de thème, reset, typographie, fond ambiant */
 :root {
   color-scheme: dark;
-  --bg-canvas: #090A0F;
-  --bg-surface: rgba(17, 19, 26, 0.85);
-  --bg-surface-hover: rgba(24, 27, 36, 0.92);
-  --bg-elevated: #141720;
-  --bg-nav: rgba(12, 14, 20, 0.9);
+  --bg-canvas: #07090e;
+  --bg-surface: rgba(22, 27, 38, 0.55);
+  --bg-surface-hover: rgba(30, 37, 52, 0.7);
+  --bg-elevated: rgba(26, 32, 46, 0.72);
+  --bg-nav: rgba(12, 16, 24, 0.65);
 
-  --border-subtle: rgba(255, 255, 255, 0.07);
-  --border-hover: rgba(255, 255, 255, 0.15);
-  --border-focus: rgba(255, 255, 255, 0.28);
+  --border-subtle: rgba(255, 255, 255, 0.08);
+  --border-glass: rgba(255, 255, 255, 0.14);
+  --border-hover: rgba(255, 255, 255, 0.22);
+  --border-focus: rgba(56, 189, 248, 0.55);
 
   --text-main: #F8FAFC;
   --text-muted: #94A3B8;
   --text-subtle: #64748B;
 
+  /* Glass effects */
+  --glass-blur: blur(28px) saturate(190%);
+  --glass-shadow: 0 16px 36px -10px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.16);
+  --glass-shadow-hover: 0 20px 42px -10px rgba(0, 0, 0, 0.65), inset 0 1px 0 rgba(255, 255, 255, 0.24);
+
   /* Subject colors */
-  --col-maths: #EF4444;
+  --col-maths: #F43F5E;
   --col-physique: #A855F7;
   --col-chimie: #10B981;
-  --col-si: #64748B;
+  --col-si: #0284C7;
   --col-francais: #3B82F6;
-  --col-anglais: #EAB308;
+  --col-anglais: #F59E0B;
 }
 
 * {
@@ -83,11 +89,17 @@ body {
 
 .saas-card {
   background: var(--bg-surface);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
-  border: 1px solid var(--border-subtle);
-  border-radius: 14px;
-  transition: border-color 0.15s ease, background-color 0.15s ease;
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+  border: 1px solid var(--border-glass);
+  border-radius: 16px;
+  box-shadow: var(--glass-shadow);
+  transition: all 0.22s cubic-bezier(0.16, 1, 0.3, 1);
 }
-.saas-card:hover { border-color: rgba(255, 255, 255, 0.12); }
+.saas-card:hover {
+  background: var(--bg-surface-hover);
+  border-color: var(--border-hover);
+  box-shadow: var(--glass-shadow-hover);
+  transform: translateY(-1px);
+}
 

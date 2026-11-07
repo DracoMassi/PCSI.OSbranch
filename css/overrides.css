@@ -1,25 +1,92 @@
-/* overrides.css : surcharges glass, logo, sync, portails, kanban, responsive mobile */
 .ambient-glow {
   background:
-    radial-gradient(circle at 12% 8%, rgba(129, 140, 248, 0.075), transparent 42%),
-    radial-gradient(circle at 88% 82%, rgba(56, 189, 248, 0.05), transparent 45%),
-    radial-gradient(circle at 70% 18%, rgba(255, 255, 255, 0.025), transparent 35%);
+    radial-gradient(circle at 18% 12%, rgba(99, 102, 241, 0.14), transparent 48%),
+    radial-gradient(circle at 82% 80%, rgba(56, 189, 248, 0.12), transparent 52%),
+    radial-gradient(circle at 50% 45%, rgba(168, 85, 247, 0.08), transparent 40%);
 }
 .btn-primary {
-  background: rgba(255,255,255,0.09); color: var(--text-main); border: 1px solid rgba(255,255,255,0.16);
-  -webkit-backdrop-filter: none; backdrop-filter: none; box-shadow: none; text-shadow: none; transition: background-color 0.15s ease, border-color 0.15s ease;
+  background: rgba(255, 255, 255, 0.12);
+  color: #FFFFFF;
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.35), 0 4px 14px rgba(0, 0, 0, 0.25);
+  font-weight: 500;
+  letter-spacing: -0.01em;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
 }
-.btn-primary:hover { background: rgba(255,255,255,0.14); border-color: rgba(255,255,255,0.26); }
-.btn-primary:active { background: rgba(255,255,255,0.18); }
-.btn-ghost { background: rgba(255,255,255,0.03); border: 1px solid var(--border-subtle); -webkit-backdrop-filter: none; backdrop-filter: none; box-shadow: none; }
-.btn-ghost:hover { background: rgba(255,255,255,0.07); border-color: var(--border-hover); }
-.btn-ghost.active-pill { background: rgba(255,255,255,0.10); border-color: rgba(255,255,255,0.2); box-shadow: none; }
-.nav-item.active { background: rgba(255,255,255,0.07); border-color: transparent; box-shadow: inset -2px 0 0 rgba(255,255,255,0.85); }
-.custom-check.checked { background: #E2E8F0; border-color: #E2E8F0; color: #090A0F; box-shadow: none; }
-.saas-card { -webkit-backdrop-filter: blur(18px) saturate(140%); backdrop-filter: blur(18px) saturate(140%); box-shadow: inset 0 1px 0 rgba(255,255,255,0.05), 0 10px 28px -16px rgba(0,0,0,0.65); }
-.modal-box { background: linear-gradient(180deg, rgba(25,28,39,0.93), rgba(15,17,24,0.95)); -webkit-backdrop-filter: blur(24px) saturate(150%); backdrop-filter: blur(24px) saturate(150%); box-shadow: inset 0 1px 0 rgba(255,255,255,0.08), 0 24px 60px rgba(0,0,0,0.7); }
-.custom-select-menu { background: rgba(20,23,32,0.9); -webkit-backdrop-filter: blur(18px) saturate(150%); backdrop-filter: blur(18px) saturate(150%); box-shadow: inset 0 1px 0 rgba(255,255,255,0.07), 0 14px 32px rgba(0,0,0,0.55); }
-#toast { background: rgba(20,23,32,0.82); -webkit-backdrop-filter: blur(18px) saturate(150%); backdrop-filter: blur(18px) saturate(150%); box-shadow: inset 0 1px 0 rgba(255,255,255,0.08), 0 12px 28px rgba(0,0,0,0.5); }
+.btn-primary:hover {
+  background: rgba(255, 255, 255, 0.18);
+  border-color: rgba(255, 255, 255, 0.32);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.45), 0 6px 20px rgba(0, 0, 0, 0.35);
+  transform: translateY(-1px);
+}
+.btn-primary:active {
+  background: rgba(255, 255, 255, 0.22);
+  transform: translateY(0);
+}
+.btn-ghost {
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--border-glass);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.1);
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.btn-ghost:hover {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: var(--border-hover);
+  color: var(--text-main);
+  transform: translateY(-1px);
+}
+.btn-ghost.active-pill {
+  background: rgba(255, 255, 255, 0.12);
+  border-color: rgba(255, 255, 255, 0.24);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.18);
+  color: #FFFFFF;
+}
+.nav-item.active {
+  background: rgba(255, 255, 255, 0.1);
+  border-color: rgba(255, 255, 255, 0.16);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.22), 0 4px 14px rgba(0, 0, 0, 0.25);
+}
+.custom-check.checked {
+  background: #FFFFFF;
+  border-color: #FFFFFF;
+  color: #090A0F;
+  box-shadow: 0 0 12px rgba(255, 255, 255, 0.4);
+}
+.saas-card {
+  background: rgba(20, 25, 36, 0.52);
+  -webkit-backdrop-filter: blur(28px) saturate(190%);
+  backdrop-filter: blur(28px) saturate(190%);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.15), 0 14px 34px -12px rgba(0, 0, 0, 0.55);
+}
+.modal-box {
+  background: rgba(18, 22, 33, 0.78);
+  -webkit-backdrop-filter: blur(36px) saturate(200%);
+  backdrop-filter: blur(36px) saturate(200%);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.22), 0 28px 70px rgba(0, 0, 0, 0.75);
+  border-radius: 20px;
+}
+.custom-select-menu {
+  background: rgba(18, 22, 32, 0.82);
+  -webkit-backdrop-filter: blur(26px) saturate(180%);
+  backdrop-filter: blur(26px) saturate(180%);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.14), 0 16px 36px rgba(0, 0, 0, 0.6);
+  border-radius: 14px;
+}
+#toast {
+  background: rgba(18, 22, 32, 0.85);
+  -webkit-backdrop-filter: blur(24px) saturate(180%);
+  backdrop-filter: blur(24px) saturate(180%);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.2), 0 16px 36px rgba(0, 0, 0, 0.5);
+  border-radius: 99px;
+}
 
 .brand-logo, .brand-logo *, .brand-name, .brand-name * { font-family: 'Oxanium', 'JetBrains Mono', monospace; }
 .brand-logo { width: 36px; height: 36px; border-radius: 9px; flex-shrink: 0; object-fit: cover; background: rgba(255,255,255,0.04); padding: 0; border: 1px solid rgba(255,255,255,0.16); }
