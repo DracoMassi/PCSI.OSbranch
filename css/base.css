@@ -1,40 +1,44 @@
-/* base.css : variables de thème, reset, typographie, fond ambiant */
+/* base.css : variables de thème Glassmorphism V2, reset, typographie, fond ambiant */
 :root {
   color-scheme: dark;
-  --bg-canvas: #07090e;
-  --bg-surface: rgba(22, 27, 38, 0.55);
-  --bg-surface-hover: rgba(30, 37, 52, 0.7);
-  --bg-elevated: rgba(26, 32, 46, 0.72);
-  --bg-nav: rgba(12, 16, 24, 0.65);
+  --bg-canvas: #04060b;
+  --bg-surface: rgba(20, 25, 38, 0.42);
+  --bg-surface-hover: rgba(28, 35, 52, 0.58);
+  --bg-elevated: rgba(22, 28, 44, 0.78);
+  --bg-nav: rgba(14, 18, 28, 0.56);
 
   --border-subtle: rgba(255, 255, 255, 0.08);
-  --border-glass: rgba(255, 255, 255, 0.14);
-  --border-hover: rgba(255, 255, 255, 0.22);
-  --border-focus: rgba(56, 189, 248, 0.55);
+  --border-glass: rgba(255, 255, 255, 0.13);
+  --border-hover: rgba(255, 255, 255, 0.24);
+  --border-focus: rgba(56, 189, 248, 0.65);
 
   --text-main: #F8FAFC;
   --text-muted: #94A3B8;
   --text-subtle: #64748B;
 
-  /* Glass effects */
-  --glass-blur: blur(28px) saturate(190%);
-  --glass-shadow: 0 16px 36px -10px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.16);
-  --glass-shadow-hover: 0 20px 42px -10px rgba(0, 0, 0, 0.65), inset 0 1px 0 rgba(255, 255, 255, 0.24);
+  /* Apple visionOS / macOS Glass V2 tokens */
+  --glass-blur: blur(32px) saturate(200%);
+  --glass-blur-heavy: blur(44px) saturate(210%);
+  --glass-shadow: 0 20px 48px -12px rgba(0, 0, 0, 0.55), inset 0 1px 0 0 rgba(255, 255, 255, 0.18), inset 0 0 0 0.5px rgba(255, 255, 255, 0.06);
+  --glass-shadow-hover: 0 24px 56px -12px rgba(0, 0, 0, 0.68), inset 0 1px 0 0 rgba(255, 255, 255, 0.28), inset 0 0 0 0.5px rgba(255, 255, 255, 0.12);
+  --radius-card: 22px;
+  --radius-pill: 999px;
+  --radius-input: 14px;
 
   /* Subject colors */
-  --col-maths: #F43F5E;
-  --col-physique: #A855F7;
-  --col-chimie: #10B981;
-  --col-si: #0284C7;
-  --col-francais: #3B82F6;
-  --col-anglais: #F59E0B;
+  --col-maths: #FB7185;
+  --col-physique: #C084FC;
+  --col-chimie: #34D399;
+  --col-si: #38BDF8;
+  --col-francais: #60A5FA;
+  --col-anglais: #FBBF24;
 }
 
 * {
   box-sizing: border-box;
   margin: 0;
   padding: 0;
-  font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+  font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'SF Pro Text', 'Plus Jakarta Sans', sans-serif;
   -webkit-tap-highlight-color: transparent;
   scrollbar-width: thin;
   scrollbar-color: rgba(255, 255, 255, 0.14) transparent;
@@ -42,8 +46,8 @@
 
 /* Custom Ultra-Thin Dark Scrollbars */
 ::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
+  width: 5px;
+  height: 5px;
 }
 ::-webkit-scrollbar-track {
   background: transparent;
@@ -59,22 +63,26 @@
   background: transparent;
 }
 
-.mono { font-family: 'JetBrains Mono', monospace; }
+.mono { font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, monospace; }
 .handwriting { font-family: 'Caveat', cursive; }
 
 html, body {
   max-width: 100vw;
   overflow-x: hidden;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
 body {
   background-color: var(--bg-canvas);
   color: var(--text-main);
   min-height: 100vh;
+  min-height: 100dvh;
   overflow-x: hidden;
   position: relative;
   font-size: 13.5px;
   line-height: 1.5;
+  letter-spacing: -0.011em;
 }
 
 .ambient-glow {
@@ -83,23 +91,23 @@ body {
   pointer-events: none;
   z-index: 0;
   background:
-    radial-gradient(circle at 15% 10%, rgba(255, 255, 255, 0.03), transparent 40%),
-    radial-gradient(circle at 85% 85%, rgba(148, 163, 184, 0.025), transparent 45%);
+    radial-gradient(ellipse 65% 55% at 15% 8%, rgba(99, 102, 241, 0.16), transparent 60%),
+    radial-gradient(ellipse 60% 50% at 88% 18%, rgba(56, 189, 248, 0.13), transparent 60%),
+    radial-gradient(ellipse 65% 55% at 75% 88%, rgba(168, 85, 247, 0.12), transparent 60%),
+    radial-gradient(ellipse 50% 45% at 18% 85%, rgba(16, 185, 129, 0.08), transparent 55%);
 }
 
 .saas-card {
-  background: var(--bg-surface);
+  background: linear-gradient(155deg, rgba(255, 255, 255, 0.065) 0%, rgba(20, 26, 40, 0.44) 100%);
   backdrop-filter: var(--glass-blur);
   -webkit-backdrop-filter: var(--glass-blur);
   border: 1px solid var(--border-glass);
-  border-radius: 16px;
+  border-radius: var(--radius-card);
   box-shadow: var(--glass-shadow);
-  transition: all 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+  transition: transform 0.26s cubic-bezier(0.16, 1, 0.3, 1), border-color 0.22s ease, background 0.22s ease, box-shadow 0.26s ease;
 }
 .saas-card:hover {
-  background: var(--bg-surface-hover);
   border-color: var(--border-hover);
   box-shadow: var(--glass-shadow-hover);
-  transform: translateY(-1px);
 }
 
