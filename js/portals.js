@@ -150,12 +150,16 @@ window.toggleAutoDsBoost = function() {
   showToast(state.settings.autoDsBoost ? 'Boost Auto-DS activé' : 'Boost Auto-DS désactivé');
 };
 
-window.setDsSubjectOverride = function(val) {
+window.setDsSubjectOverride = function(val, event = null) {
+  if (event) event.stopPropagation();
+  document.querySelectorAll('.custom-select.open').forEach(el => el.classList.remove('open'));
   if (!state.settings) state.settings = JSON.parse(JSON.stringify(DEFAULT_SETTINGS));
   state.settings.dsSubjectOverride = val || 'auto';
   saveState();
   window.renderSettingsPanel();
   if (state.activeTab === 'cahier') renderCahier();
+  const label = (!val || val === 'auto') ? 'Détection Auto-DS activée' : `Boost DS forcé : ${SUBJECTS[val]?.name || val}`;
+  showToast(label);
 };
 
 window.updateSettingValue = function(key, val) {
@@ -465,8 +469,26 @@ window.renderSettingsPanel = function() {
   const cfg = state.settings || DEFAULT_SETTINGS;
   const alphaPct = Math.round((cfg.alpha || 0.65) * 100);
   const detectedDsSubjects = getUpcomingSaturdayDsSubjects();
-  const detectedDsNames = detectedDsSubjects.map(id => SUBJECTS[id]?.name || id).join(', ') || 'Aucun DS détecté ce samedi';
+  const hasDetectedDs = detectedDsSubjects.length > 0;
+  const detectedDsNames = hasDetectedDs
+    ? detectedDsSubjects.map(id => SUBJECTS[id]?.name || id).join(', ')
+    : 'Aucun DS détecté';
   const mults = Object.assign({}, DEFAULT_TYPE_MULTIPLIERS, cfg.typeMultipliers || {});
+
+  const dsOverrideVal = cfg.dsSubjectOverride || 'auto';
+  const dsSelectOptions = [
+    {
+      value: 'auto',
+      label: `Auto (${detectedDsNames})`,
+      dot: hasDetectedDs && SUBJECTS[detectedDsSubjects[0]] ? SUBJECTS[detectedDsSubjects[0]].color : null
+    },
+    ...Object.values(SUBJECTS).map(s => ({
+      value: s.id,
+      label: `Forcer : ${s.name}`,
+      dot: s.color
+    }))
+  ];
+  const currentDsOpt = dsSelectOptions.find(o => o.value === dsOverrideVal) || dsSelectOptions[0];
 
   const typeList = Object.values(TASK_TYPES);
 
@@ -503,28 +525,50 @@ window.renderSettingsPanel = function() {
         <div class="settings-field-group" style="border-top:1px solid var(--border-subtle); padding-top:12px;">
           <div style="display:flex; justify-content:space-between; align-items:center; gap:10px; margin-bottom:10px;">
             <div>
-              <div style="font-size:12.5px; font-weight:600; color:var(--text-main);">Facteur Auto-DS du Samedi</div>
-              <div style="font-size:11px; color:var(--text-muted);">Amplifie automatiquement la tension des missions de la matière du prochain DS</div>
+              <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+                <span style="font-size:12.5px; font-weight:600; color:var(--text-main);">Détecteur &amp; Boost Auto-DS</span>
+                <span class="mono" style="font-size:10px; padding:2px 7px; border-radius:99px; background:${hasDetectedDs ? 'rgba(234,179,8,0.16)' : 'rgba(255,255,255,0.06)'}; border:1px solid ${hasDetectedDs ? 'rgba(234,179,8,0.4)' : 'var(--border-subtle)'}; color:${hasDetectedDs ? '#FACC15' : 'var(--text-muted)'};">
+                  <i class="ph-bold ${hasDetectedDs ? 'ph-lightning' : 'ph-magnifying-glass'}"></i> ${escapeHtml(detectedDsNames)}
+                </span>
+              </div>
+              <div style="font-size:11px; color:var(--text-muted); margin-top:2px;">Détecte les DS dans l'Agenda et les Missions à venir (≤ 10j) et amplifie leur matière</div>
             </div>
             <button type="button" onclick="window.toggleAutoDsBoost()" class="settings-toggle-btn ${cfg.autoDsBoost ? 'on' : ''}" aria-label="Activer Boost Auto-DS">
               <span class="settings-toggle-knob"></span>
             </button>
           </div>
 
-          <div class="settings-subgrid-2" style="display:grid; grid-template-columns:1fr 1fr; gap:10px; align-items:center; ${cfg.autoDsBoost ? '' : 'opacity:0.45; pointer-events:none;'}">
+          <div class="settings-subgrid-2" style="display:grid; grid-template-columns:1fr 1fr; gap:12px; align-items:end; ${cfg.autoDsBoost ? '' : 'opacity:0.45; pointer-events:none;'}">
             <div>
-              <div style="display:flex; justify-content:space-between; font-size:11.5px; margin-bottom:4px;">
+              <div style="display:flex; justify-content:space-between; font-size:11.5px; margin-bottom:6px;">
                 <span style="color:var(--text-muted);">Multiplicateur DS</span>
                 <span id="cfg-ds-boost-readout" class="mono" style="font-weight:700; color:#F59E0B;">×${(cfg.dsBoostFactor || 1.4).toFixed(1)}</span>
               </div>
               <input type="range" min="1.1" max="2.2" step="0.1" value="${cfg.dsBoostFactor || 1.4}" oninput="window.onDsBoostFactorInput(this.value)" class="saas-range" />
             </div>
             <div>
-              <label style="font-size:11px; color:var(--text-muted); display:block; margin-bottom:4px;">Matière ciblée Samedi</label>
-              <select class="saas-input" style="padding:6px 10px; font-size:11.5px;" onchange="window.setDsSubjectOverride(this.value)">
-                <option value="auto" ${(!cfg.dsSubjectOverride || cfg.dsSubjectOverride === 'auto') ? 'selected' : ''}>Auto (${escapeHtml(detectedDsNames)})</option>
-                ${Object.values(SUBJECTS).map(s => `<option value="${s.id}" ${cfg.dsSubjectOverride === s.id ? 'selected' : ''}>Forcer : ${escapeHtml(s.name)}</option>`).join('')}
-              </select>
+              <label style="font-size:11px; color:var(--text-muted); display:block; margin-bottom:5px;">Matière ciblée (Auto ou Forcée)</label>
+              <div class="custom-select" id="cs-ds-override">
+                <div class="custom-select-trigger" style="padding:7px 11px; font-size:12px;" onclick="window.toggleCustomSelect('ds-override', event)">
+                  <span style="display:flex; align-items:center; gap:7px; overflow:hidden; white-space:nowrap;">
+                    ${currentDsOpt.dot ? `<span class="subj-dot" style="background:${currentDsOpt.dot};"></span>` : `<i class="ph-bold ph-magic-wand" style="color:#FACC15; font-size:12px;"></i>`}
+                    <span>${escapeHtml(currentDsOpt.label)}</span>
+                  </span>
+                  <i class="ph ph-caret-down" style="font-size:12px; color:var(--text-subtle);"></i>
+                </div>
+                <div class="custom-select-menu">
+                  ${dsSelectOptions.map(opt => {
+                    const isSel = opt.value === dsOverrideVal;
+                    const dotHtml = opt.dot ? `<span class="subj-dot" style="background:${opt.dot};"></span>` : `<i class="ph-bold ph-magic-wand" style="color:#FACC15; font-size:12px;"></i>`;
+                    return `
+                      <div class="custom-select-option ${isSel ? 'selected' : ''}" onclick="window.setDsSubjectOverride('${opt.value}', event)">
+                        <span style="display:flex; align-items:center; gap:7px;">${dotHtml}<span>${escapeHtml(opt.label)}</span></span>
+                        ${isSel ? '<i class="ph-bold ph-check" style="font-size:11px;"></i>' : ''}
+                      </div>
+                    `;
+                  }).join('')}
+                </div>
+              </div>
             </div>
           </div>
         </div>
@@ -550,7 +594,7 @@ window.renderSettingsPanel = function() {
           </div>
           <div>
             <h3 style="font-size:14.5px; font-weight:700;">After-Hours Engine &amp; AnkiConnect</h3>
-            <p style="font-size:11.5px; color:var(--text-muted);">Enveloppe horaire dynamique, buffer de trajet et deck Anki cible</p>
+            <p style="font-size:11.5px; color:var(--text-muted);">Horaires du soir, pause après les cours et deck Anki cible</p>
           </div>
         </div>
 
@@ -578,7 +622,7 @@ window.renderSettingsPanel = function() {
           </div>
           <div>
             <label style="font-size:11.5px; font-weight:600; color:var(--text-muted); display:block; margin-bottom:5px;">
-              <i class="ph-bold ph-person-simple-walk" style="color:#34D399;"></i> Buffer Trajet / Transition (min)
+              <i class="ph-bold ph-person-simple-walk" style="color:#34D399;"></i> Pause / Trajet après cours (min)
             </label>
             <input type="number" min="0" max="120" step="5" class="saas-input mono" value="${Number.isFinite(Number(cfg.commuteBufferMin)) ? Number(cfg.commuteBufferMin) : 30}" onchange="window.updateSettingValue('commuteBufferMin', this.value)" />
           </div>
@@ -587,11 +631,11 @@ window.renderSettingsPanel = function() {
         <div style="padding-top:10px; border-top:1px solid var(--border-subtle);">
           <label style="font-size:11.5px; font-weight:600; color:var(--text-muted); display:flex; align-items:center; justify-content:space-between; margin-bottom:5px;">
             <span><i class="ph-bold ph-cards" style="color:#38BDF8;"></i> Target Anki Deck <small style="color:var(--text-subtle); font-weight:400;">(Syntaxe Parent::Enfant)</small></span>
-            <span class="mono" style="font-size:10px; color:#38BDF8;">localhost:8765</span>
+            <span class="mono" style="font-size:10px; color:#38BDF8;">127.0.0.1:8765</span>
           </label>
           <input type="text" id="settings-anki-deck-input" class="saas-input mono" placeholder="PCSI::Vocabulaire (ex: Anglais::Vocabulaire)" value="${escapeHtml(cfg.ankiDeck || 'PCSI::Vocabulaire')}" onchange="window.updateSettingValue('ankiDeck', this.value)" />
           <div style="font-size:11px; color:var(--text-subtle); margin-top:4px;">
-            Utilisé par les boutons <b>[+ Anki]</b> du Daily Drop. Défaut si vide : <code class="mono">PCSI::Vocabulaire</code>.
+            Utilisé par les boutons <b>[+ Anki]</b> du Daily Drop. Nécessite le greffon AnkiConnect (<code class="mono">2055492159</code>).
           </div>
         </div>
 

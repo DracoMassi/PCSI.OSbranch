@@ -214,17 +214,21 @@ function ensureAnkiModalMounted() {
   modal.className = 'modal-backdrop';
   modal.innerHTML = `
     <div class="modal-box" style="max-width:480px;">
-      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px;">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
         <div style="display:flex; align-items:center; gap:9px;">
           <span style="width:32px; height:32px; border-radius:9px; background:rgba(56,189,248,0.14); border:1px solid rgba(56,189,248,0.32); color:#38BDF8; display:inline-flex; align-items:center; justify-content:center; font-size:16px;">
             <i class="ph-bold ph-cards"></i>
           </span>
           <div>
             <h3 style="font-size:15px; font-weight:700;">Ajouter à Anki (AnkiConnect)</h3>
-            <div class="mono" style="font-size:10.5px; color:var(--text-subtle);">POST http://localhost:8765 · Note Type : Basic</div>
+            <div class="mono" style="font-size:10.5px; color:var(--text-subtle);">127.0.0.1:8765 · Note Type : Basic</div>
           </div>
         </div>
         <button type="button" onclick="window.closeAnkiModal()" class="btn-ghost" style="padding:4px 7px; border:none;"><i class="ph ph-x"></i></button>
+      </div>
+      <div style="font-size:11px; color:var(--text-muted); background:rgba(255,255,255,0.03); border:1px solid var(--border-subtle); border-radius:8px; padding:7px 10px; margin-bottom:12px; display:flex; align-items:center; justify-content:space-between; gap:8px; flex-wrap:wrap;">
+        <span><i class="ph-bold ph-info" style="color:#38BDF8;"></i> Pas d'AnkiConnect ? Dans Anki : <b>Outils → Greffons → code <code class="mono" style="color:#38BDF8;">2055492159</code></b></span>
+        <button type="button" onclick="window.copyAnkiAddonCode()" class="btn-ghost mono" style="padding:2px 7px; font-size:10px;">Copier code</button>
       </div>
       <form onsubmit="window.submitAnkiCard(event)" style="display:flex; flex-direction:column; gap:12px;">
         <div>
@@ -242,12 +246,17 @@ function ensureAnkiModalMounted() {
           <label style="font-size:11.5px; font-weight:600; color:var(--text-muted); display:block; margin-bottom:4px;">Back (Verso — Traduction, Définition &amp; Exemple) *</label>
           <textarea id="anki-back-input" class="saas-input" rows="4" style="resize:vertical;" required></textarea>
         </div>
-        <div id="anki-modal-status" style="display:none; font-size:11.5px; padding:8px 10px; border-radius:8px;"></div>
-        <div style="display:flex; justify-content:flex-end; gap:8px; margin-top:4px;">
-          <button type="button" onclick="window.closeAnkiModal()" class="btn-ghost">Annuler</button>
-          <button type="submit" id="anki-submit-btn" class="btn-primary">
-            <i class="ph-bold ph-paper-plane-tilt"></i> <span>Ajouter la carte</span>
+        <div id="anki-modal-status" style="display:none; font-size:11.5px; padding:9px 11px; border-radius:9px; line-height:1.45;"></div>
+        <div style="display:flex; justify-content:space-between; align-items:center; gap:8px; margin-top:4px; flex-wrap:wrap;">
+          <button type="button" onclick="window.copyAnkiCardFallback()" class="btn-ghost" style="font-size:11.5px; padding:6px 10px;" title="Copier Recto/Verso dans le presse-papiers si vous n'utilisez pas AnkiConnect">
+            <i class="ph ph-copy"></i> <span>Copier texte</span>
           </button>
+          <div style="display:flex; gap:8px;">
+            <button type="button" onclick="window.closeAnkiModal()" class="btn-ghost">Annuler</button>
+            <button type="submit" id="anki-submit-btn" class="btn-primary">
+              <i class="ph-bold ph-paper-plane-tilt"></i> <span>Ajouter la carte</span>
+            </button>
+          </div>
         </div>
       </form>
     </div>
@@ -256,6 +265,59 @@ function ensureAnkiModalMounted() {
     if (e.target === modal) window.closeAnkiModal();
   });
   document.body.appendChild(modal);
+}
+
+window.copyAnkiAddonCode = function() {
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText('2055492159').then(() => {
+      showToast('Code AnkiConnect 2055492159 copié !');
+    }).catch(() => {
+      showToast('Code AnkiConnect : 2055492159');
+    });
+  } else {
+    showToast('Code AnkiConnect : 2055492159');
+  }
+};
+
+window.copyAnkiCardFallback = function() {
+  const frontEl = document.getElementById('anki-front-input');
+  const backEl = document.getElementById('anki-back-input');
+  const f = String(frontEl ? frontEl.value : '').trim();
+  const b = String(backEl ? backEl.value : '').trim();
+  const txt = `${f}\t${b.replace(/\r?\n/g, ' — ')}`;
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(txt).then(() => {
+      showToast('Carte copiée (Recto + Verso) dans le presse-papiers ✓');
+    }).catch(() => {
+      showToast('Impossible de copier automatiquement');
+    });
+  }
+};
+
+/**
+ * Envoie une requête à AnkiConnect en utilisant une requête CORS Simple (sans en-tête Content-Type: application/json)
+ * pour éviter le blocage du preflight OPTIONS par défaut d'AnkiConnect, et teste 127.0.0.1 puis localhost.
+ */
+async function invokeAnkiConnect(action, params = {}) {
+  const payload = JSON.stringify({ action, version: 6, params });
+  const endpoints = ['http://127.0.0.1:8765', 'http://localhost:8765'];
+  let lastErr = null;
+
+  for (const url of endpoints) {
+    try {
+      // Important : ne PAS mettre headers: {'Content-Type': 'application/json'}
+      // afin que le navigateur envoie une requête simple text/plain sans OPTIONS preflight bloqué par AnkiConnect.
+      const res = await fetch(url, {
+        method: 'POST',
+        body: payload
+      });
+      const text = await res.text();
+      return text ? JSON.parse(text) : { result: null, error: null };
+    } catch (err) {
+      lastErr = err;
+    }
+  }
+  throw lastErr || new Error('AnkiConnect unreachable');
 }
 
 window.openAnkiModal = function(front = '', back = '', customDeck = null) {
@@ -325,42 +387,25 @@ window.submitAnkiCard = async function(e) {
 
   try {
     // 1. Créer le deck (supporte la hiérarchie Parent::Child) au cas où il n'existe pas encore dans Anki
-    await fetch('http://localhost:8765', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        action: 'createDeck',
-        version: 6,
-        params: { deck: deckName }
-      })
-    });
+    await invokeAnkiConnect('createDeck', { deck: deckName });
 
     // 2. Appel addNote via AnkiConnect
-    const res = await fetch('http://localhost:8765', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        action: 'addNote',
-        version: 6,
-        params: {
-          note: {
-            deckName,
-            modelName: 'Basic',
-            fields: {
-              Front: frontHtml,
-              Back: backHtml
-            },
-            options: {
-              allowDuplicate: false,
-              duplicateScope: 'deck'
-            },
-            tags: ['pcsi_os', 'daily_drop']
-          }
-        }
-      })
+    const data = await invokeAnkiConnect('addNote', {
+      note: {
+        deckName,
+        modelName: 'Basic',
+        fields: {
+          Front: frontHtml,
+          Back: backHtml
+        },
+        options: {
+          allowDuplicate: false,
+          duplicateScope: 'deck'
+        },
+        tags: ['pcsi_os', 'daily_drop']
+      }
     });
 
-    const data = await res.json();
     if (data && data.error) {
       if (statusEl) {
         statusEl.style.display = 'block';
@@ -380,9 +425,15 @@ window.submitAnkiCard = async function(e) {
       statusEl.style.background = 'rgba(239, 68, 68, 0.12)';
       statusEl.style.border = '1px solid rgba(239, 68, 68, 0.35)';
       statusEl.style.color = '#FCA5A5';
-      statusEl.innerHTML = `Impossible de joindre <b>http://localhost:8765</b>. Vérifie qu'<b>Anki</b> est ouvert sur ton ordinateur avec l'extension <b>AnkiConnect</b> (code <code class="mono">2055492159</code>).`;
+      statusEl.innerHTML = `
+        <div style="font-weight:700; margin-bottom:3px;"><i class="ph-bold ph-warning-circle"></i> Extension AnkiConnect non détectée</div>
+        <div style="font-size:11px; color:rgba(252,165,165,0.9);">
+          Si tu n'as pas <b>AnkiConnect</b> : ouvre Anki → <b>Outils → Greffons → Récupérer</b> → colle le code <code class="mono" style="background:rgba(0,0,0,0.3); padding:1px 5px; border-radius:4px;">2055492159</code> puis redémarre Anki.<br>
+          <span style="color:var(--text-muted);">Astuce : si tu utilises le site en ligne (HTTPS), ajoute <code class="mono">"*"</code> dans <code class="mono">webCorsOriginList</code> (Options du greffon AnkiConnect) ou utilise le bouton « Copier texte » ci-dessous.</span>
+        </div>
+      `;
     }
-    showToast('Anki non détecté sur localhost:8765 (vérifie qu\'Anki est ouvert)');
+    showToast('AnkiConnect non détecté (code greffon Anki : 2055492159)');
   } finally {
     if (btn) {
       btn.disabled = false;

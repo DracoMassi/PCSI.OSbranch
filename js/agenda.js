@@ -108,7 +108,7 @@ function getDayScheduleSlots(dateObj, dayIdx) {
 }
 
 /**
- * Détecte si la journée est un week-end sans cours ou un jour férié (Blank Canvas)
+ * Détecte si la journée est sans cours obligatoire (Vacances, Week-end sans cours ou Jour férié -> Blank Canvas)
  */
 function getDayCanvasStatus(dateObj, dayIdx, slots) {
   const holidayName = typeof getFrenchBankHolidayName === 'function' ? getFrenchBankHolidayName(dateObj) : null;
@@ -116,14 +116,17 @@ function getDayCanvasStatus(dateObj, dayIdx, slots) {
   const isSaturday = dayIdx === 5 || dateObj.getDay() === 6;
   const hasMandatoryCourses = Array.isArray(slots) && slots.length > 0;
 
-  if (holidayName && !hasMandatoryCourses) {
-    return { isBlankCanvas: true, reason: `Jour férié (${holidayName})`, badge: 'JOUR FÉRIÉ · BLANK CANVAS' };
-  }
-  if (isSunday && !hasMandatoryCourses) {
-    return { isBlankCanvas: true, reason: 'Dimanche (Aucun cours obligatoire)', badge: 'WEEK-END · BLANK CANVAS' };
-  }
-  if (isSaturday && !hasMandatoryCourses) {
-    return { isBlankCanvas: true, reason: 'Samedi libre (Aucun cours)', badge: 'WEEK-END · BLANK CANVAS' };
+  if (!hasMandatoryCourses) {
+    if (holidayName) {
+      return { isBlankCanvas: true, reason: `Jour férié (${holidayName}) — Planning vierge`, badge: 'JOUR FÉRIÉ · PLANNING VIERGE' };
+    }
+    if (isSunday) {
+      return { isBlankCanvas: true, reason: 'Dimanche — Planning vierge à remplir soi-même', badge: 'WEEK-END · PLANNING VIERGE' };
+    }
+    if (isSaturday) {
+      return { isBlankCanvas: true, reason: 'Samedi sans cours — Planning vierge à remplir soi-même', badge: 'WEEK-END · PLANNING VIERGE' };
+    }
+    return { isBlankCanvas: true, reason: 'Vacances / Journée sans cours — Planning vierge à remplir soi-même', badge: 'VACANCES / LIBRE · PLANNING VIERGE' };
   }
   return { isBlankCanvas: false, reason: null, badge: null };
 }
@@ -131,8 +134,8 @@ function getDayCanvasStatus(dateObj, dayIdx, slots) {
 /**
  * Feature 1: Dynamic Gap Calculation (After-Hours Engine)
  * Analyse l'emploi du temps du jour pour détecter :
- * - Les fins de cours anticipées vs séances tardives (ex: fin des cours à 15:30, colle à 19:00 -> ouvre 16:00-18:30 avec buffer de 30m)
- * - Les jours Blank Canvas (week-ends / jours fériés sans cours)
+ * - Les fins de cours anticipées vs séances tardives (ex: fin des cours à 15:30, colle à 19:00 -> ouvre 16:00-18:30 avec pause après cours de 30m)
+ * - Les jours Blank Canvas (vacances / week-ends / jours fériés où l'emploi du temps est vide : laissés vierges par défaut)
  * - La fenêtre de dîner et la limite de coucher (bedtime)
  */
 function computeAfterHoursEnvelope(dateObj, dayIdx) {
@@ -155,20 +158,20 @@ function computeAfterHoursEnvelope(dateObj, dayIdx) {
     type: sl.type || 'Cours'
   })).sort((a, b) => a.start - b.start || a.end - b.end);
 
-  // Cas 1 : Week-end ou Jour Férié (Blank Canvas : aucun cours obligatoire en journée)
+  // Cas 1 : Emploi du temps vide (Vacances, Week-end sans cours ou Jour Férié -> Blank Canvas laissé vierge par défaut)
   if (canvasStatus.isBlankCanvas) {
     const canvasStart = 9 * 60; // 09:00
     const lunchStart = 12 * 60 + 30; // 12:30
     const lunchEnd = 13 * 60 + 30;   // 13:30
     const windows = [];
     if (canvasStart < lunchStart) {
-      windows.push({ start: canvasStart, end: Math.min(lunchStart, dinnerStartMin), label: 'Session Matin (Blank Canvas)' });
+      windows.push({ start: canvasStart, end: Math.min(lunchStart, dinnerStartMin), label: 'Matinée libre' });
     }
     if (lunchEnd < dinnerStartMin) {
-      windows.push({ start: lunchEnd, end: Math.min(dinnerStartMin, bedtimeMin), label: 'Session Après-midi' });
+      windows.push({ start: lunchEnd, end: Math.min(dinnerStartMin, bedtimeMin), label: 'Après-midi libre' });
     }
     if (dinnerEndMin < bedtimeMin) {
-      windows.push({ start: dinnerEndMin, end: bedtimeMin, label: 'Session Soirée' });
+      windows.push({ start: dinnerEndMin, end: bedtimeMin, label: 'Soirée libre' });
     }
     return {
       isBlankCanvas: true,
@@ -176,33 +179,6 @@ function computeAfterHoursEnvelope(dateObj, dayIdx) {
       canvasBadge: canvasStatus.badge,
       bufferMin,
       startMin: canvasStart,
-      dinnerStartMin,
-      dinnerEndMin,
-      bedtimeMin,
-      windows,
-      lateAcademicSlots: [],
-      lastDaytimeSlot: null,
-      lunchBreak: { startMin: lunchStart, endMin: lunchEnd }
-    };
-  }
-
-  // Cas 2 : Journée de semaine sans créneau renseigné dans l'agenda
-  if (sortedSlots.length === 0) {
-    const effectiveStart = Math.min(defaultClassEndMin, bedtimeMin);
-    const windows = [];
-    if (effectiveStart < dinnerStartMin) {
-      windows.push({ start: effectiveStart, end: Math.min(dinnerStartMin, bedtimeMin), label: 'Avant dîner' });
-    }
-    const postDinner = Math.max(effectiveStart, dinnerEndMin);
-    if (postDinner < bedtimeMin) {
-      windows.push({ start: postDinner, end: bedtimeMin, label: 'Après dîner' });
-    }
-    return {
-      isBlankCanvas: false,
-      canvasReason: null,
-      canvasBadge: null,
-      bufferMin,
-      startMin: effectiveStart,
       dinnerStartMin,
       dinnerEndMin,
       bedtimeMin,
@@ -550,12 +526,18 @@ function buildEveningScheduleModel(dateObj, dayIdx) {
 
   const baseStudyCapacityMin = windows.reduce((acc, w) => acc + Math.max(0, w.end - w.start), 0);
   const excludedSet = new Set((state.eveningPlan && state.eveningPlan.excludedIds) || []);
+  const canvasAddedByDay = (state.eveningPlan && state.eveningPlan.canvasAddedByDay && typeof state.eveningPlan.canvasAddedByDay === 'object')
+    ? state.eveningPlan.canvasAddedByDay
+    : {};
+  const canvasAddedSet = new Set(Array.isArray(canvasAddedByDay[dayISO]) ? canvasAddedByDay[dayISO] : []);
   const orderedCandidates = getOrderedEveningCandidates(dayISO);
   const dayNaps = getDayNaps(dayISO);
   const totalNapMin = dayNaps.reduce((acc, n) => acc + (parseInt(n.durationMin, 10) || 20), 0);
 
   // Étape 1 : Sélectionner les missions qui rentrent dans l'enveloppe d'étude (AVANT l'impact des siestes,
   // afin qu'insérer une sieste décale dynamiquement les blocs suivants SANS JAMAIS supprimer de mission !)
+  // Sur un jour Blank Canvas (vacances, week-end, férié, emploi du temps vide), ne PAS pré-remplir :
+  // seules les missions explicitement ajoutées par l'utilisateur (canvasAddedSet) sont placées sur la timeline.
   const selectedTasks = [];
   const overflowTasks = [];
   const allocatedTaskIds = new Set();
@@ -563,6 +545,19 @@ function buildEveningScheduleModel(dateObj, dayIdx) {
   let bedtimeOverflowMin = 0;
 
   orderedCandidates.forEach(task => {
+    if (env.isBlankCanvas && !canvasAddedSet.has(task.id) && task.completedInEveningDate !== dayISO) {
+      if (!isTaskCompleted(task)) {
+        overflowTasks.push({
+          task,
+          reason: 'Planning vierge — Glisser ⠿ ou cliquer « + Ajouter »',
+          neededMin: Math.round(getTaskEveningDurationHours(task) * 60),
+          isManualDefer: false,
+          isBlankCanvasPool: true
+        });
+      }
+      return;
+    }
+
     if (excludedSet.has(task.id)) {
       if (!isTaskCompleted(task)) {
         overflowTasks.push({ task, reason: 'Reporté manuellement', neededMin: Math.round(getTaskEveningDurationHours(task) * 60), isManualDefer: true });
@@ -589,7 +584,7 @@ function buildEveningScheduleModel(dateObj, dayIdx) {
 
   // Étape 2 : Ordonner la séquence unifiée [Siestes + Missions sélectionnées] selon manualOrder
   // Par défaut, une nouvelle sieste se place en tête ou à la position choisie par glisser-déposer,
-  // ce qui décale dynamiquement toutes les missions situées après elle.
+  // ce qui décale dynamiquement toutes les missions situées après elle de +20m / +30m / +45m.
   const manual = (state.eveningPlan && Array.isArray(state.eveningPlan.manualOrder)) ? state.eveningPlan.manualOrder : [];
   const timelineSequence = [];
   const napMap = new Map(dayNaps.map(n => [n.id, n]));
@@ -622,8 +617,8 @@ function buildEveningScheduleModel(dateObj, dayIdx) {
   });
 
   // Étape 3 : Allouer les créneaux horaires dans les fenêtres actives
-  // Si les siestes poussent la dernière tâche au-delà de bedtimeMin, on étend la dernière fenêtre de totalNapMin
-  // pour que les tâches soient décalées (shifted) sans jamais être supprimées.
+  // Si les siestes poussent les tâches au-delà d'une fenêtre ou de bedtimeMin, on étend la dernière fenêtre de totalNapMin
+  // pour que toutes les tâches suivantes soient repoussées de la durée de la sieste sans jamais être supprimées.
   const winCursors = windows.map((w, idx) => ({
     start: w.start,
     cursor: w.start,
@@ -633,11 +628,13 @@ function buildEveningScheduleModel(dateObj, dayIdx) {
   }));
 
   const scheduledBlocks = [];
+  let cumulativeNapShiftMin = 0;
 
   timelineSequence.forEach(entry => {
     if (entry.itemType === 'nap') {
       const nap = entry.nap;
       const napDur = Math.max(10, parseInt(nap.durationMin, 10) || 20);
+      cumulativeNapShiftMin += napDur;
       let left = napDur;
       for (let i = 0; i < winCursors.length && left > 0; i++) {
         const w = winCursors[i];
@@ -687,57 +684,59 @@ function buildEveningScheduleModel(dateObj, dayIdx) {
         durationMin: seg.durationMin,
         partIndex: totalParts > 1 ? partIndex++ : null,
         totalParts: totalParts > 1 ? totalParts : null,
+        shiftedByNapMin: cumulativeNapShiftMin,
         shiftedPastBedtime: seg.end > bedtimeMin
       });
     });
   });
 
   const timelineEvents = [...scheduledBlocks];
+  const isCompletelyEmptyBlankCanvas = env.isBlankCanvas && selectedTasks.length === 0 && dayNaps.length === 0;
 
-  // Ajouter les créneaux libres restants dans la limite du couvre-feu de base
-  winCursors.forEach(w => {
-    const freeEnd = Math.min(w.baseEnd, w.end);
-    if (freeEnd - w.cursor >= 15) {
-      timelineEvents.push({
-        kind: 'free',
-        startMin: w.cursor,
-        endMin: freeEnd,
-        durationMin: freeEnd - w.cursor
+  if (isCompletelyEmptyBlankCanvas) {
+    // Journée sans cours (Vacances, Week-end, Férié) et aucune tâche ajoutée : laisser le planning 100% vierge !
+    timelineEvents.push({
+      kind: 'blank_canvas_empty',
+      startMin: effectiveStartMin,
+      endMin: bedtimeMin,
+      durationMin: Math.max(0, bedtimeMin - effectiveStartMin)
+    });
+  } else {
+    // Ajouter les créneaux libres restants dans la limite du couvre-feu de base
+    winCursors.forEach(w => {
+      const freeEnd = Math.min(w.baseEnd, w.end);
+      if (freeEnd - w.cursor >= 15) {
+        timelineEvents.push({
+          kind: 'free',
+          startMin: w.cursor,
+          endMin: freeEnd,
+          durationMin: freeEnd - w.cursor
+        });
+      }
+    });
+
+    // Ajouter les séances académiques tardives (ex: Colle 19:00-20:00) pour visualiser pourquoi la fenêtre pré-colle s'est arrêtée à 18:30
+    if (Array.isArray(env.lateAcademicSlots)) {
+      env.lateAcademicSlots.forEach(ls => {
+        timelineEvents.push({
+          kind: 'academic_late',
+          slot: ls,
+          startMin: ls.start,
+          endMin: ls.end,
+          durationMin: ls.end - ls.start,
+          bufferMin: env.bufferMin
+        });
       });
     }
-  });
 
-  // Ajouter les séances académiques tardives (ex: Colle 19:00-20:00) pour visualiser pourquoi la fenêtre pré-colle s'est arrêtée à 18:30
-  if (Array.isArray(env.lateAcademicSlots)) {
-    env.lateAcademicSlots.forEach(ls => {
+    if (dinnerStartMin < bedtimeMin && dinnerEndMin > effectiveStartMin) {
       timelineEvents.push({
-        kind: 'academic_late',
-        slot: ls,
-        startMin: ls.start,
-        endMin: ls.end,
-        durationMin: ls.end - ls.start,
-        bufferMin: env.bufferMin
+        kind: 'dinner',
+        startMin: dinnerStartMin,
+        endMin: dinnerEndMin,
+        durationMin: dinnerEndMin - dinnerStartMin
       });
-    });
-  }
-
-  // Ajouter la pause déjeuner en mode Blank Canvas (Week-end / Férié)
-  if (env.lunchBreak) {
-    timelineEvents.push({
-      kind: 'lunch',
-      startMin: env.lunchBreak.startMin,
-      endMin: env.lunchBreak.endMin,
-      durationMin: env.lunchBreak.endMin - env.lunchBreak.startMin
-    });
-  }
-
-  if (dinnerStartMin < bedtimeMin && dinnerEndMin > effectiveStartMin) {
-    timelineEvents.push({
-      kind: 'dinner',
-      startMin: dinnerStartMin,
-      endMin: dinnerEndMin,
-      durationMin: dinnerEndMin - dinnerStartMin
-    });
+    }
   }
 
   timelineEvents.sort((a, b) => a.startMin - b.startMin || a.endMin - b.endMin);
@@ -771,7 +770,10 @@ function formatDurationHM(totalMinutes) {
 
 function ensureEveningManualOrderInitialized(dayISO = null) {
   const targetISO = dayISO || getEveningSelectedDayISO();
-  if (!state.eveningPlan) state.eveningPlan = { manualOrder: [], excludedIds: [], customDurations: {}, pinnedEveningIds: [], naps: {} };
+  if (!state.eveningPlan) state.eveningPlan = { manualOrder: [], excludedIds: [], customDurations: {}, pinnedEveningIds: [], naps: {}, canvasAddedByDay: {} };
+  if (!state.eveningPlan.canvasAddedByDay || typeof state.eveningPlan.canvasAddedByDay !== 'object') {
+    state.eveningPlan.canvasAddedByDay = {};
+  }
   const existingNaps = getDayNaps(targetISO).map(n => n.id);
   const candidates = getOrderedEveningCandidates(targetISO).map(t => t.id);
   // Conserver les positions existantes des siestes dans manualOrder
@@ -793,10 +795,13 @@ function ensureEveningManualOrderInitialized(dayISO = null) {
 
 /**
  * Feature 1.3 : Power Nap / Pause Trigger (+ Poser une sieste : 20m, 30m, 45m)
- * Insère une sieste dans l'After-Hours Engine et décale dynamiquement les blocs de tâches suivants sans les supprimer.
+ * Insère une sieste dans l'After-Hours Engine et repousse dynamiquement toutes les tâches suivantes de 20/30/45 min sans les supprimer.
  */
 window.addEveningNap = function(durationMin = 20, event = null) {
-  if (event) event.stopPropagation();
+  if (event) {
+    event.stopPropagation();
+    event.preventDefault();
+  }
   const dur = [20, 30, 45].includes(Number(durationMin)) ? Number(durationMin) : 20;
   const dayISO = getEveningSelectedDayISO();
   ensureEveningManualOrderInitialized(dayISO);
@@ -806,14 +811,19 @@ window.addEveningNap = function(durationMin = 20, event = null) {
   if (!Array.isArray(state.eveningPlan.naps[dayISO])) {
     state.eveningPlan.naps[dayISO] = [];
   }
-  const napId = 'nap_' + uid();
+  const napGenId = (typeof uid === 'function')
+    ? uid()
+    : (Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 7));
+  const napId = 'nap_' + napGenId;
   state.eveningPlan.naps[dayISO].push({
     id: napId,
     durationMin: dur,
     label: `Power Nap (${dur}m)`
   });
-  // Insérer la sieste au début des tâches non terminées (ou en tête de soirée) pour décaler les blocs suivants
+
+  // Insérer la sieste juste avant la première tâche non terminée (ou en tête de soirée) pour repousser toutes les tâches suivantes de +dur min
   const firstActiveTaskIdx = state.eveningPlan.manualOrder.findIndex(id => {
+    if (String(id).startsWith('nap_')) return false;
     const t = state.tasks.find(x => x.id === id);
     return t && !isTaskCompleted(t);
   });
@@ -824,7 +834,7 @@ window.addEveningNap = function(durationMin = 20, event = null) {
   }
   saveState();
   renderAgenda();
-  showToast(`Sieste de ${dur} min posée — créneaux suivants décalés (+${dur}m)`);
+  showToast(`Sieste de ${dur} min ajoutée — toutes les tâches sont repoussées de +${dur} min`);
 };
 
 window.removeEveningNap = function(napId, dayISO = null, event = null) {
@@ -838,7 +848,7 @@ window.removeEveningNap = function(napId, dayISO = null, event = null) {
   }
   saveState();
   renderAgenda();
-  showToast('Sieste retirée — planning réajusté');
+  showToast('Sieste retirée — horaires des tâches réajustés');
 };
 
 window.moveEveningTaskOrder = function(taskId, delta, event) {
@@ -856,32 +866,56 @@ window.moveEveningTaskOrder = function(taskId, delta, event) {
   renderAgenda();
 };
 
+function markTaskAddedOnCanvasDay(taskId, dayISO) {
+  if (!taskId || String(taskId).startsWith('nap_')) return;
+  if (!state.eveningPlan.canvasAddedByDay || typeof state.eveningPlan.canvasAddedByDay !== 'object') {
+    state.eveningPlan.canvasAddedByDay = {};
+  }
+  if (!Array.isArray(state.eveningPlan.canvasAddedByDay[dayISO])) {
+    state.eveningPlan.canvasAddedByDay[dayISO] = [];
+  }
+  if (!state.eveningPlan.canvasAddedByDay[dayISO].includes(taskId)) {
+    state.eveningPlan.canvasAddedByDay[dayISO].push(taskId);
+  }
+}
+
+function unmarkTaskAddedOnCanvasDay(taskId, dayISO) {
+  if (!taskId || !state.eveningPlan || !state.eveningPlan.canvasAddedByDay) return;
+  if (Array.isArray(state.eveningPlan.canvasAddedByDay[dayISO])) {
+    state.eveningPlan.canvasAddedByDay[dayISO] = state.eveningPlan.canvasAddedByDay[dayISO].filter(id => id !== taskId);
+  }
+}
+
 window.prioritizeTaskTonight = function(taskId, event) {
   if (event) event.stopPropagation();
-  ensureEveningManualOrderInitialized();
+  const dayISO = getEveningSelectedDayISO();
+  ensureEveningManualOrderInitialized(dayISO);
   state.eveningPlan.excludedIds = (state.eveningPlan.excludedIds || []).filter(id => id !== taskId);
+  markTaskAddedOnCanvasDay(taskId, dayISO);
   state.eveningPlan.manualOrder = [taskId, ...state.eveningPlan.manualOrder.filter(id => id !== taskId)];
   saveState();
   renderAgenda();
-  showToast('Mission placée en tête de l\'After-Hours Engine');
+  showToast('Mission ajoutée au planning After-Hours');
 };
 
 window.deferTaskToOverflow = function(taskId, event) {
   if (event) event.stopPropagation();
-  ensureEveningManualOrderInitialized();
+  const dayISO = getEveningSelectedDayISO();
+  ensureEveningManualOrderInitialized(dayISO);
+  unmarkTaskAddedOnCanvasDay(taskId, dayISO);
   if (!state.eveningPlan.excludedIds.includes(taskId)) {
     state.eveningPlan.excludedIds.push(taskId);
   }
   saveState();
   renderAgenda();
-  showToast('Mission basculée dans À reporter');
+  showToast('Mission retirée de la timeline');
 };
 
 window.adjustEveningTaskDuration = function(taskId, deltaHours, event) {
   if (event) event.stopPropagation();
   const task = state.tasks.find(t => t.id === taskId);
   if (!task) return;
-  if (!state.eveningPlan) state.eveningPlan = { manualOrder: [], excludedIds: [], customDurations: {}, pinnedEveningIds: [], naps: {} };
+  if (!state.eveningPlan) state.eveningPlan = { manualOrder: [], excludedIds: [], customDurations: {}, pinnedEveningIds: [], naps: {}, canvasAddedByDay: {} };
   if (!state.eveningPlan.customDurations) state.eveningPlan.customDurations = {};
   const current = getTaskEveningDurationHours(task);
   const next = Math.max(0.25, Math.min(6, Number((current + deltaHours).toFixed(2))));
@@ -892,15 +926,25 @@ window.adjustEveningTaskDuration = function(taskId, deltaHours, event) {
 };
 
 window.resetEveningAllocation = function() {
+  const dayISO = getEveningSelectedDayISO();
   const existingNaps = (state.eveningPlan && state.eveningPlan.naps) ? state.eveningPlan.naps : {};
-  state.eveningPlan = { manualOrder: [], excludedIds: [], customDurations: {}, pinnedEveningIds: [], naps: existingNaps };
+  const existingCanvasByDay = (state.eveningPlan && state.eveningPlan.canvasAddedByDay) ? state.eveningPlan.canvasAddedByDay : {};
+  if (existingCanvasByDay[dayISO]) delete existingCanvasByDay[dayISO];
+  if (existingNaps[dayISO]) delete existingNaps[dayISO];
+  state.eveningPlan = { manualOrder: [], excludedIds: [], customDurations: {}, pinnedEveningIds: [], naps: existingNaps, canvasAddedByDay: existingCanvasByDay };
   state.tasks.forEach(t => {
     delete t.completedInEveningDate;
     delete t.eveningAllocatedHours;
   });
   saveState();
   renderAgenda();
-  showToast('After-Hours Engine recalculé (Tension + Flux Cours → TD → DM)');
+  showToast('After-Hours Engine réinitialisé');
+};
+
+window.selectEveningBuffer = function(minutesVal, event) {
+  if (event) event.stopPropagation();
+  document.querySelectorAll('.custom-select.open').forEach(el => el.classList.remove('open'));
+  window.updateEveningRhythmQuick('commuteBufferMin', minutesVal);
 };
 
 window.updateEveningRhythmQuick = function(field, value) {
@@ -928,6 +972,7 @@ window.toggleTaskFromEvening = function(taskId, dayISO, event) {
 
   const targetISO = dayISO || getEveningSelectedDayISO();
   ensureEveningManualOrderInitialized(targetISO);
+  markTaskAddedOnCanvasDay(taskId, targetISO);
   if (!state.eveningPlan.pinnedEveningIds) state.eveningPlan.pinnedEveningIds = [];
   if (!state.eveningPlan.pinnedEveningIds.includes(taskId)) {
     state.eveningPlan.pinnedEveningIds.push(taskId);
@@ -979,8 +1024,10 @@ window.onEveningDropOnTask = function(e, targetItemId) {
   draggedEveningTaskId = null;
   if (!srcId || srcId === targetItemId) return;
 
-  ensureEveningManualOrderInitialized();
+  const dayISO = getEveningSelectedDayISO();
+  ensureEveningManualOrderInitialized(dayISO);
   state.eveningPlan.excludedIds = (state.eveningPlan.excludedIds || []).filter(id => id !== srcId);
+  markTaskAddedOnCanvasDay(srcId, dayISO);
   const arr = state.eveningPlan.manualOrder.filter(id => id !== srcId);
   const targetIdx = arr.indexOf(targetItemId);
   if (targetIdx === -1) arr.unshift(srcId);
@@ -1093,14 +1140,24 @@ function renderEveningPlanner(weekDates) {
     </div>
   `;
 
-  // Résumé intelligent de l'ouverture de fenêtre (ex: Fin des cours 15:30 + 30m buffer -> 16:00 | Colle à 19:00 -> fenêtre 16:00-18:30)
+  // Résumé intelligent de l'ouverture de fenêtre (ex: Fin des cours 15:30 + 30m pause -> 16:00 | Colle à 19:00 -> fenêtre 16:00-18:30)
   const startContextHtml = env.isBlankCanvas
-    ? `<span style="color:#34D399; font-weight:700;"><i class="ph-bold ph-sun-horizon"></i> ${escapeHtml(env.canvasBadge)}</span> <small class="hide-mobile" style="color:var(--text-subtle);">(${escapeHtml(env.canvasReason)} · 09:00 → ${minToTime(model.bedtimeMin)})</small>`
-    : `<span><span class="rhythm-lbl">Ouverture :</span> <strong class="mono">${minToTime(model.startMin)}</strong>${env.lastDaytimeSlot ? ` <small class="hide-mobile" style="color:var(--text-subtle);">(Fin ${minToTime(env.rawClassEndMin)} + ${env.bufferMin}m trajet)</small>` : ''}</span>`;
+    ? `<span style="color:#34D399; font-weight:700;"><i class="ph-bold ph-sun-horizon"></i> ${escapeHtml(env.canvasBadge)}</span> <small class="hide-mobile" style="color:var(--text-subtle);">(${escapeHtml(env.canvasReason)})</small>`
+    : `<span><span class="rhythm-lbl">Début révisions :</span> <strong class="mono">${minToTime(model.startMin)}</strong>${env.lastDaytimeSlot ? ` <small class="hide-mobile" style="color:var(--text-subtle);">(Fin cours ${minToTime(env.rawClassEndMin)} + ${env.bufferMin}m pause)</small>` : ''}</span>`;
 
   const windowsSummaryBadges = env.windows.map(w =>
     `<span class="mono" style="font-size:10.5px; padding:2px 7px; border-radius:6px; background:rgba(56,189,248,0.12); border:1px solid rgba(56,189,248,0.3); color:#38BDF8;">${minToTime(w.start)} → ${minToTime(w.end)}</span>`
   ).join(' ');
+
+  const bufferOptions = [
+    { val: 0, label: '0 min (Direct)', short: '0 min' },
+    { val: 15, label: '15 min', short: '15 min' },
+    { val: 20, label: '20 min', short: '20 min' },
+    { val: 30, label: '30 min (Conseillé)', short: '30 min' },
+    { val: 45, label: '45 min', short: '45 min' },
+    { val: 60, label: '1h00 (60 min)', short: '1h00' }
+  ];
+  const currentBufObj = bufferOptions.find(o => o.val === Number(env.bufferMin)) || { val: Number(env.bufferMin) || 30, label: `${env.bufferMin} min`, short: `${env.bufferMin} min` };
 
   const rhythmBarHtml = `
     <div class="evening-rhythm-bar">
@@ -1109,12 +1166,26 @@ function renderEveningPlanner(weekDates) {
           <i class="ph-bold ph-lightning" style="color:#38BDF8;"></i>
           ${startContextHtml}
         </div>
-        <div class="evening-stat-pill" title="Buffer de trajet / transition après les cours et avant une colle tardive">
+        <div class="evening-stat-pill evening-stat-pill-dropdown" title="Temps de pause ou de trajet entre la fin des cours et le début des révisions">
           <i class="ph-bold ph-person-simple-walk" style="color:#34D399;"></i>
-          <span class="rhythm-lbl">Buffer :</span>
-          <select onchange="window.updateEveningRhythmQuick('commuteBufferMin', this.value)" class="evening-time-mini mono" style="cursor:pointer;">
-            ${[0, 15, 20, 30, 45, 60].map(v => `<option value="${v}" ${Number(env.bufferMin) === v ? 'selected' : ''}>${v}m</option>`).join('')}
-          </select>
+          <span class="rhythm-lbl">Pause après cours :</span>
+          <div class="custom-select evening-inline-select" id="cs-afterhours-buffer">
+            <button type="button" class="custom-select-trigger evening-inline-select-trigger mono" onclick="window.toggleCustomSelect('afterhours-buffer', event)">
+              <span>${escapeHtml(currentBufObj.short)}</span>
+              <i class="ph-bold ph-caret-down" style="font-size:10px; color:#34D399;"></i>
+            </button>
+            <div class="custom-select-menu evening-inline-select-menu">
+              ${bufferOptions.map(opt => {
+                const isSel = Number(env.bufferMin) === opt.val;
+                return `
+                  <div class="custom-select-option ${isSel ? 'selected' : ''}" onclick="window.selectEveningBuffer(${opt.val}, event)">
+                    <span class="mono" style="font-size:12px;">${escapeHtml(opt.label)}</span>
+                    ${isSel ? '<i class="ph-bold ph-check" style="font-size:11px; color:#34D399;"></i>' : ''}
+                  </div>
+                `;
+              }).join('')}
+            </div>
+          </div>
         </div>
         <div class="evening-stat-pill">
           <i class="ph-bold ph-fork-knife" style="color:#F59E0B;"></i>
@@ -1136,33 +1207,29 @@ function renderEveningPlanner(weekDates) {
           <button type="button" onclick="window.addEveningNap(30, event)" class="btn-ghost evening-ctrl-btn mono" style="padding:3px 7px; font-size:11px; color:#34D399; border-color:rgba(16,185,129,0.3);">30m</button>
           <button type="button" onclick="window.addEveningNap(45, event)" class="btn-ghost evening-ctrl-btn mono" style="padding:3px 7px; font-size:11px; color:#34D399; border-color:rgba(16,185,129,0.3);">45m</button>
         </div>
-        <button type="button" onclick="window.resetEveningAllocation()" class="btn-ghost evening-regen-btn" title="Recalculer l'After-Hours Engine (Tension + Flux Cours → TD → DM)">
-          <i class="ph-bold ph-arrows-clockwise"></i> <span>Optimiser</span>
+        <button type="button" onclick="window.resetEveningAllocation()" class="btn-ghost evening-regen-btn" title="${env.isBlankCanvas ? 'Vider le planning libre du jour' : 'Recalculer l\'After-Hours Engine (Tension + Flux Cours → TD → DM)'}">
+          <i class="ph-bold ph-arrows-clockwise"></i> <span>${env.isBlankCanvas ? 'Vider' : 'Optimiser'}</span>
         </button>
       </div>
     </div>
   `;
 
   const timelineHtml = model.timelineEvents.map(ev => {
-    if (ev.kind === 'lunch') {
+    if (ev.kind === 'blank_canvas_empty') {
       return `
-        <div class="evening-slot-card evening-slot-dinner" style="border-left:3px solid #38BDF8;">
-          <div class="evening-slot-time mono">
-            <span>${minToTime(ev.startMin)}</span>
-            <span class="evening-time-sep">↓</span>
-            <span>${minToTime(ev.endMin)}</span>
-            <span class="evening-dur-chip">${ev.durationMin}m</span>
-          </div>
-          <div class="evening-slot-body">
-            <div style="display:flex; align-items:center; justify-content:space-between; gap:8px; flex-wrap:wrap;">
-              <div style="display:flex; align-items:center; gap:9px;">
-                <span class="evening-dinner-ico" style="color:#38BDF8; background:rgba(56,189,248,0.14);"><i class="ph-fill ph-coffee"></i></span>
-                <div>
-                  <div style="font-weight:700; font-size:13px; color:#BAE6FD;">Pause Déjeuner &amp; Coupure Méridienne</div>
-                  <div class="hide-mobile" style="font-size:11.5px; color:var(--text-muted);">Coupure recommandée sur journée Blank Canvas · ${ev.durationMin} min</div>
-                </div>
-              </div>
-              <span class="mono" style="font-size:10px; padding:2px 8px; border-radius:99px; background:rgba(56,189,248,0.14); border:1px solid rgba(56,189,248,0.35); color:#38BDF8;">PAUSE MIDI</span>
+        <div class="evening-slot-card evening-slot-free evening-drop-target"
+             ondragover="window.onEveningDragOver(event)"
+             ondragleave="window.onEveningDragLeave(event)"
+             ondrop="window.onEveningDropToTimeline(event)"
+             style="padding:28px 20px; border:1px dashed rgba(52, 211, 153, 0.35); background:rgba(16, 185, 129, 0.03); justify-content:center; text-align:center;">
+          <div style="max-width:460px; margin:0 auto; display:flex; flex-direction:column; align-items:center; gap:8px;">
+            <span style="width:40px; height:40px; border-radius:11px; background:rgba(16,185,129,0.12); border:1px solid rgba(16,185,129,0.3); color:#34D399; display:inline-flex; align-items:center; justify-content:center; font-size:20px;">
+              <i class="ph-bold ph-calendar-blank"></i>
+            </span>
+            <div style="font-weight:700; font-size:14px; color:var(--text-main);">Planning vierge (${escapeHtml(env.canvasReason || 'Journée sans cours')})</div>
+            <div style="font-size:12px; color:var(--text-muted); line-height:1.45;">
+              Aucun cours obligatoire aujourd'hui : l'After-Hours Engine reste volontairement vide.<br>
+              Glisse tes missions ici avec la poignée <strong class="mono">⠿</strong> ou clique sur <b>« + Ajouter au planning »</b> dans la colonne de droite pour composer ton programme.
             </div>
           </div>
         </div>
@@ -1185,7 +1252,7 @@ function renderEveningPlanner(weekDates) {
                 <span class="evening-dinner-ico" style="color:#FB7185; background:rgba(244,63,94,0.16);"><i class="ph-fill ph-chalkboard-teacher"></i></span>
                 <div>
                   <div style="font-weight:700; font-size:13px; color:#FECDD3;">Séance Académique Tardive : ${escapeHtml(ls.title)}</div>
-                  <div style="font-size:11.5px; color:rgba(254,205,211,0.75);">Buffer de transition (${ev.bufferMin}m) appliqué dès ${minToTime(ev.startMin - ev.bufferMin)}</div>
+                  <div style="font-size:11.5px; color:rgba(254,205,211,0.75);">Pause de transition (${ev.bufferMin}m) appliquée dès ${minToTime(ev.startMin - ev.bufferMin)}</div>
                 </div>
               </div>
               <span class="mono" style="font-size:10px; padding:2px 8px; border-radius:99px; background:rgba(244,63,94,0.16); border:1px solid rgba(244,63,94,0.38); color:#FDA4AF;">EMPLOI DU TEMPS</span>
@@ -1218,13 +1285,13 @@ function renderEveningPlanner(weekDates) {
                 <span class="k-handle evening-drag-handle" title="Glisser pour déplacer la sieste">⠿</span>
                 <span class="evening-dinner-ico" style="color:#34D399; background:rgba(16,185,129,0.16);"><i class="ph-fill ph-battery-charging"></i></span>
                 <div style="min-width:0;">
-                  <div style="font-weight:700; font-size:13px; color:#A7F3D0;">Power Nap &amp; Récupération Cognitive (${ev.durationMin} min)</div>
-                  <div class="hide-mobile" style="font-size:11.5px; color:rgba(167, 243, 208, 0.75);">Décale automatiquement les missions suivantes (+${ev.durationMin}m) sans aucune suppression</div>
+                  <div style="font-weight:700; font-size:13px; color:#A7F3D0;">Pause Sieste &amp; Récupération (${ev.durationMin} min)</div>
+                  <div class="hide-mobile" style="font-size:11.5px; color:rgba(167, 243, 208, 0.75);">Repousse automatiquement toutes les tâches suivantes de +${ev.durationMin} min</div>
                 </div>
               </div>
               <div style="display:flex; align-items:center; gap:6px;">
-                <span class="mono" style="font-size:10px; padding:2px 8px; border-radius:99px; background:rgba(16,185,129,0.16); border:1px solid rgba(16,185,129,0.38); color:#34D399;">SIESTE FLASH</span>
-                <button type="button" onclick="window.removeEveningNap('${nap.id}', '${dayISO}', event)" class="btn-ghost evening-ctrl-btn" style="color:#F87171; padding:3px 7px;" title="Supprimer cette sieste">
+                <span class="mono" style="font-size:10px; padding:2px 8px; border-radius:99px; background:rgba(16,185,129,0.16); border:1px solid rgba(16,185,129,0.38); color:#34D399;">SIESTE +${ev.durationMin}M</span>
+                <button type="button" onclick="window.removeEveningNap('${nap.id}', '${dayISO}', event)" class="btn-ghost evening-ctrl-btn" style="color:#F87171; padding:3px 7px;" title="Retirer cette sieste">
                   <i class="ph-bold ph-x"></i>
                 </button>
               </div>
@@ -1313,7 +1380,7 @@ function renderEveningPlanner(weekDates) {
                   ${t._pedagoChainLabel ? `<span class="mono" style="font-size:10px; padding:1px 6px; border-radius:5px; background:rgba(56,189,248,0.14); border:1px solid rgba(56,189,248,0.32); color:#38BDF8; font-weight:600;" title="Ordonnancement pédagogique automatique (Cours → TD/Exos → DM)"><i class="ph-bold ph-flow-arrow"></i> ${escapeHtml(t._pedagoChainLabel)}</span>` : ''}
                   ${isDone ? `<span class="mono" style="font-size:10px; padding:1px 6px; border-radius:5px; background:rgba(16,185,129,0.18); border:1px solid rgba(16,185,129,0.38); color:#34D399; font-weight:700;">VALIDÉ</span>` : ''}
                   ${ev.partIndex ? `<span class="mono" style="font-size:10px; padding:1px 6px; border-radius:5px; background:rgba(255,255,255,0.08); color:var(--text-muted);">Partie ${ev.partIndex}/${ev.totalParts}</span>` : ''}
-                  ${ev.shiftedPastBedtime ? `<span class="mono" style="font-size:10px; padding:1px 6px; border-radius:5px; background:rgba(245,158,11,0.15); border:1px solid rgba(245,158,11,0.35); color:#FBBF24;">Décalé (Sieste)</span>` : ''}
+                  ${ev.shiftedByNapMin ? `<span class="mono" style="font-size:10px; padding:1px 6px; border-radius:5px; background:rgba(16,185,129,0.15); border:1px solid rgba(16,185,129,0.35); color:#34D399;" title="Repoussé de ${ev.shiftedByNapMin} min par votre sieste"><i class="ph-bold ph-clock-clockwise"></i> Repoussé +${ev.shiftedByNapMin}m (Sieste)</span>` : ''}
                 </div>
                 <div class="evening-task-title" style="${isDone ? 'text-decoration:line-through; color:var(--text-subtle);' : 'color:var(--text-main);'}">${escapeHtml(t.title)}</div>
                 ${phaseLbl ? `<div style="font-size:11.5px; color:${isDone ? '#10B981' : '#38BDF8'}; margin-top:3px; font-weight:600; ${isDone ? 'text-decoration:line-through;' : ''}"><i class="ph-bold ph-git-commit"></i> ${escapeHtml(phaseLbl)}</div>` : ''}
@@ -1326,7 +1393,7 @@ function renderEveningPlanner(weekDates) {
               <button type="button" onclick="event.stopPropagation(); window.adjustEveningTaskDuration('${t.id}', 0.25, event)" class="btn-ghost evening-ctrl-btn" title="Augmenter le temps ce soir (+15 min)">+15m</button>
               <button type="button" onclick="event.stopPropagation(); window.moveEveningTaskOrder('${t.id}', -1, event)" class="btn-ghost evening-ctrl-btn" title="Monter dans la timeline"><i class="ph-bold ph-arrow-up"></i></button>
               <button type="button" onclick="event.stopPropagation(); window.moveEveningTaskOrder('${t.id}', 1, event)" class="btn-ghost evening-ctrl-btn" title="Descendre dans la timeline"><i class="ph-bold ph-arrow-down"></i></button>
-              <button type="button" onclick="event.stopPropagation(); window.deferTaskToOverflow('${t.id}', event)" class="btn-ghost evening-ctrl-btn evening-ctrl-defer" title="Reporter (Basculer dans À reporter)"><i class="ph-bold ph-arrow-elbow-right"></i> <span class="evening-defer-lbl">Reporter</span></button>
+              <button type="button" onclick="event.stopPropagation(); window.deferTaskToOverflow('${t.id}', event)" class="btn-ghost evening-ctrl-btn evening-ctrl-defer" title="Retirer de la timeline"><i class="ph-bold ph-arrow-elbow-right"></i> <span class="evening-defer-lbl">Reporter</span></button>
             </div>
           </div>
         </div>
@@ -1352,11 +1419,16 @@ function renderEveningPlanner(weekDates) {
     </div>
   `;
 
+  const overflowTitle = env.isBlankCanvas ? `Missions à placer (${model.overflowTasks.length})` : `À reporter (${model.overflowTasks.length})`;
+  const overflowSub = env.isBlankCanvas
+    ? 'Planning vierge par défaut : clique sur « + Ajouter au planning » ou glisse ⠿ vers la gauche pour composer ta journée.'
+    : 'Missions hors enveloppe horaire. Glisse la poignée ⠿ vers la timeline ou clique sur « Prioriser ce soir ».';
+
   const overflowHtml = model.overflowTasks.length === 0
     ? `
       <div class="evening-overflow-empty">
         <i class="ph-bold ph-check-circle" style="font-size:20px; color:#10B981; margin-bottom:4px;"></i>
-        <div style="font-weight:600; font-size:12.5px; color:var(--text-main);">Aucun débordement ce soir</div>
+        <div style="font-weight:600; font-size:12.5px; color:var(--text-main);">${env.isBlankCanvas ? 'Toutes vos missions sont placées' : 'Aucun débordement ce soir'}</div>
         <div style="font-size:11.5px; color:var(--text-muted);">Toutes vos missions actives rentrent dans l'After-Hours Engine avant ${escapeHtml(cfg.bedtime || '23:00')}.</div>
       </div>
     `
@@ -1365,6 +1437,7 @@ function renderEveningPlanner(weekDates) {
         const s = getSubject(t.subject);
         const p = computePressure(t);
         const durH = (item.neededMin / 60).toFixed(1).replace(/\.0$/, '');
+        const btnLabel = item.isBlankCanvasPool ? '+ Ajouter au planning' : 'Prioriser ce soir';
         return `
           <div class="saas-card evening-overflow-card"
                draggable="true"
@@ -1381,9 +1454,9 @@ function renderEveningPlanner(weekDates) {
             </div>
             <div style="font-weight:600; font-size:13px; color:var(--text-main); margin-bottom:4px;">${escapeHtml(t.title)}</div>
             <div style="display:flex; justify-content:space-between; align-items:center; gap:8px; margin-top:8px; padding-top:8px; border-top:1px solid var(--border-subtle); flex-wrap:wrap;">
-              <span style="font-size:11px; color:#F59E0B;"><i class="ph ph-clock-countdown"></i> ${escapeHtml(item.reason)}</span>
-              <button type="button" onclick="event.stopPropagation(); window.prioritizeTaskTonight('${t.id}', event)" class="btn-ghost evening-ctrl-btn" style="padding:5px 10px; font-size:11px;">
-                <i class="ph-bold ph-arrow-up-left"></i> Prioriser ce soir
+              <span style="font-size:11px; color:${item.isBlankCanvasPool ? '#34D399' : '#F59E0B'};"><i class="ph ${item.isBlankCanvasPool ? 'ph-hand-grabbing' : 'ph-clock-countdown'}"></i> ${escapeHtml(item.reason)}</span>
+              <button type="button" onclick="event.stopPropagation(); window.prioritizeTaskTonight('${t.id}', event)" class="btn-ghost evening-ctrl-btn" style="padding:5px 10px; font-size:11px; ${item.isBlankCanvasPool ? 'color:#34D399; border-color:rgba(16,185,129,0.35);' : ''}">
+                <i class="ph-bold ph-arrow-up-left"></i> ${btnLabel}
               </button>
             </div>
           </div>
@@ -1418,13 +1491,13 @@ function renderEveningPlanner(weekDates) {
            ondragleave="window.onEveningDragLeave(event)"
            ondrop="window.onEveningDropToOverflow(event)">
         <div class="evening-section-head">
-          <div style="font-size:12.5px; font-weight:700; text-transform:uppercase; letter-spacing:0.04em; color:#F59E0B;">
-            <i class="ph-bold ph-tray"></i> À reporter (${model.overflowTasks.length})
+          <div style="font-size:12.5px; font-weight:700; text-transform:uppercase; letter-spacing:0.04em; color:${env.isBlankCanvas ? '#34D399' : '#F59E0B'};">
+            <i class="ph-bold ${env.isBlankCanvas ? 'ph-list-plus' : 'ph-tray'}"></i> ${overflowTitle}
           </div>
-          <span class="mono" style="font-size:11px; color:var(--text-subtle);">Après ${escapeHtml(cfg.bedtime || '23:00')}</span>
+          <span class="mono" style="font-size:11px; color:var(--text-subtle);">${env.isBlankCanvas ? 'À la carte' : 'Après ' + escapeHtml(cfg.bedtime || '23:00')}</span>
         </div>
         <p class="hide-mobile" style="font-size:11.5px; color:var(--text-muted); margin-bottom:12px;">
-          Missions hors enveloppe horaire. Glisse la poignée ⠿ vers la timeline ou clique sur « Prioriser ce soir ».
+          ${overflowSub}
         </p>
         <div style="display:flex; flex-direction:column; gap:10px;">
           ${overflowHtml}
@@ -1596,6 +1669,8 @@ window.saveSlotForm = function(e) {
   saveState();
   closeSlotModal();
   renderAgenda();
+  if (typeof window.renderSettingsPanel === 'function') window.renderSettingsPanel();
+  if (typeof renderCahier === 'function' && state.activeTab === 'cahier') renderCahier();
 };
 
 window.deleteCurrentSlot = function() {
@@ -1605,6 +1680,8 @@ window.deleteCurrentSlot = function() {
   saveState();
   closeSlotModal();
   renderAgenda();
+  if (typeof window.renderSettingsPanel === 'function') window.renderSettingsPanel();
+  if (typeof renderCahier === 'function' && state.activeTab === 'cahier') renderCahier();
   showToast('Créneau supprimé');
 };
 
