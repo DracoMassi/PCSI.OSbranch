@@ -5,6 +5,18 @@ const DIRTY_KEY = 'pcsi_sync_dirty_v1';
 let syncDirty = false, syncOk = false, syncSaving = false, syncError = false, lastSyncAt = null, syncVersion = 0, lastDataSig = '', pushTimer = null, lastAutoSync = 0;
 
 let supaConfig = { syncId: '' }; // Mode Local-First
+
+// Réglages propres à cet appareil : jamais envoyés au cloud (clé API personnelle, cache des résultats IA).
+const LOCAL_ONLY_SETTINGS = ['aiApiKey', 'aiCache'];
+function settingsForSync(settings) {
+  const copy = Object.assign({}, settings || {});
+  LOCAL_ONLY_SETTINGS.forEach(k => { delete copy[k]; });
+  return copy;
+}
+function statePayloadForSync() {
+  return Object.assign({}, state, { settings: settingsForSync(state.settings) });
+}
+
 function dataSig(src) {
   const s = src || state;
   return JSON.stringify({
@@ -16,7 +28,7 @@ function dataSig(src) {
     po: s.portals,
     sub: s.subjects,
     tt: s.taskTypes,
-    cfg: s.settings,
+    cfg: settingsForSync(s.settings),
     ev: s.eveningPlan
   });
 }
@@ -84,7 +96,7 @@ async function pushToSupabase() {
   syncError = false;
   updateSyncIndicator();
   try {
-    const res = await fetch(supaEndpoint(), { method: 'POST', headers: supaHeaders({ 'Prefer': 'resolution=merge-duplicates,return=minimal' }), body: JSON.stringify({ id: supaConfig.syncId, payload: state }) });
+    const res = await fetch(supaEndpoint(), { method: 'POST', headers: supaHeaders({ 'Prefer': 'resolution=merge-duplicates,return=minimal' }), body: JSON.stringify({ id: supaConfig.syncId, payload: statePayloadForSync() }) });
     if (!res.ok) throw new Error('HTTP ' + res.status);
     if (v === syncVersion) { syncDirty = false; try { localStorage.removeItem(DIRTY_KEY); } catch (e) {} }
     syncSaving = false;
@@ -128,7 +140,13 @@ window.syncNowSupabase = async function(opts) {
           if (!silent) showToast('Déjà à jour');
           return;
         }
+        // Les réglages locaux (clé API, cache IA) survivent au pull : le cloud ne les contient pas.
+        const localOnly = {};
+        LOCAL_ONLY_SETTINGS.forEach(k => { if (state.settings && state.settings[k] !== undefined) localOnly[k] = state.settings[k]; });
         state = Object.assign(state, remote);
+        state.settings = Object.assign({}, state.settings);
+        LOCAL_ONLY_SETTINGS.forEach(k => { delete state.settings[k]; });
+        Object.assign(state.settings, localOnly);
         if (!state.portals || !state.portals.length) state.portals = JSON.parse(JSON.stringify(DEFAULT_PORTALS));
         if (!remote.subjects || typeof remote.subjects !== 'object' || Object.keys(remote.subjects).length === 0) {
           state.subjects = JSON.parse(JSON.stringify(DEFAULT_SUBJECTS));

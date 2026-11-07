@@ -1,113 +1,162 @@
 // netlify/functions/ai-schedule.js
 // Fonction Serverless Netlify : conversion visuelle Photo/PDF -> Emploi du temps JSON
-// Supporte la détection et la rotation automatique entre toutes les clés Gemini (GEMINI_API_KEY, GEMINI_API_KEY_1, GEMINI_API_KEY_2, etc.)
+//
+// Variables d'environnement Netlify :
+//   GEMINI_API_KEY, GEMINI_API_KEY_1, GEMINI_KEY_2, ... : clés Gemini (une ou plusieurs par variable, séparées par , ; ou espace)
+//   ALLOWED_ORIGIN : origines autorisées, séparées par des virgules (ex: https://mon-site.netlify.app).
+//                    Vide = aucun en-tête CORS (appels same-origin uniquement).
+//   GEMINI_MODELS  : modèles essayés dans l'ordre, séparés par des virgules (défaut ci-dessous).
+
+const MAX_BODY_BYTES = 6 * 1024 * 1024;
+const MAX_IMAGES = 3;
+const MAX_PROMPT_CHARS = 8000;
+const MAX_ATTEMPTS = 4;
+const DEFAULT_MODELS = 'gemini-2.5-flash-lite,gemini-2.5-flash';
+
+// Seules les variables de type clé sont lues (GEMINI_MODELS ne doit pas être pris pour une clé).
+const KEY_ENV_PATTERN = /^GEMINI_(API_)?KEY/i;
+
+const SLOT_SCHEMA = {
+  type: 'OBJECT',
+  properties: {
+    slots: {
+      type: 'ARRAY',
+      items: {
+        type: 'OBJECT',
+        properties: {
+          dayOfWeek: { type: 'INTEGER', nullable: true },
+          date: { type: 'STRING', nullable: true },
+          start: { type: 'STRING', nullable: true },
+          end: { type: 'STRING', nullable: true },
+          subject: { type: 'STRING', nullable: true },
+          type: { type: 'STRING', nullable: true },
+          title: { type: 'STRING', nullable: true },
+          room: { type: 'STRING', nullable: true }
+        },
+        required: ['dayOfWeek', 'date', 'start', 'end', 'subject', 'type', 'title', 'room']
+      }
+    }
+  },
+  required: ['slots']
+};
+
+function parseList(value) {
+  return String(value || '').split(',').map(s => s.trim()).filter(Boolean);
+}
+
+function collectApiKeys(env) {
+  const keys = [];
+  Object.entries(env || {}).forEach(([name, value]) => {
+    if (!KEY_ENV_PATTERN.test(name) || !value || typeof value !== 'string') return;
+    value.split(/[,;\s]+/).forEach(part => {
+      const cleaned = part.replace(/^['"]+|['"]+$/g, '').trim();
+      if (cleaned.length >= 20) keys.push(cleaned);
+    });
+  });
+  return Array.from(new Set(keys));
+}
+
+function shuffle(list) {
+  const arr = list.slice();
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [arr[i], arr[j]] = [arr[j], arr[i]];
+  }
+  return arr;
+}
+
+function buildImageParts(images) {
+  const parts = [];
+  images.forEach(dataUrl => {
+    const str = String(dataUrl || '');
+    const match = str.match(/^data:(image\/[a-zA-Z0-9.+-]+);base64,(.+)$/is);
+    if (match) {
+      parts.push({ inline_data: { mime_type: match[1].toLowerCase(), data: match[2] } });
+    }
+  });
+  return parts;
+}
 
 exports.handler = async function(event) {
+  const env = process.env || {};
+  const allowedOrigins = parseList(env.ALLOWED_ORIGIN);
+  const origin = (event.headers && (event.headers.origin || event.headers.Origin)) || '';
+  const originAllowed = allowedOrigins.includes(origin);
+
   const headers = {
-    'Access-Control-Allow-Origin': '*',
     'Access-Control-Allow-Headers': 'Content-Type',
     'Access-Control-Allow-Methods': 'POST, OPTIONS',
-    'Content-Type': 'application/json'
+    'Content-Type': 'application/json',
+    'Vary': 'Origin'
   };
+  if (originAllowed) headers['Access-Control-Allow-Origin'] = origin;
+
+  const reply = (statusCode, payload) => ({ statusCode, headers, body: payload === undefined ? '' : JSON.stringify(payload) });
 
   if (event.httpMethod === 'OPTIONS') {
-    return { statusCode: 200, headers, body: '' };
+    return reply(originAllowed ? 204 : 403);
+  }
+  if (event.httpMethod !== 'POST') {
+    return reply(405, { error: 'Method Not Allowed' });
   }
 
-  if (event.httpMethod !== 'POST') {
-    return { statusCode: 405, headers, body: JSON.stringify({ error: 'Method Not Allowed' }) };
+  // Un navigateur envoie toujours Origin sur un POST : s'il est présent et non autorisé, on refuse.
+  // (Atténuation seulement : un client non-navigateur peut forger cet en-tête.)
+  if (allowedOrigins.length && origin && !originAllowed) {
+    return reply(403, { error: 'Origine non autorisée' });
+  }
+
+  const rawBody = event.isBase64Encoded
+    ? Buffer.from(event.body || '', 'base64').toString('utf8')
+    : (event.body || '');
+  if (Buffer.byteLength(rawBody, 'utf8') > MAX_BODY_BYTES) {
+    return reply(413, { error: 'Document trop volumineux' });
   }
 
   let body;
   try {
-    const rawBody = event.isBase64Encoded
-      ? Buffer.from(event.body || '', 'base64').toString('utf8')
-      : (event.body || '{}');
-    body = JSON.parse(rawBody);
+    body = JSON.parse(rawBody || '{}');
   } catch (e) {
-    return { statusCode: 400, headers, body: JSON.stringify({ error: 'Requête JSON invalide' }) };
+    return reply(400, { error: 'Requête JSON invalide' });
   }
 
-  const promptText = String(body.prompt || '').trim();
-  const images = Array.isArray(body.images) ? body.images.slice(0, 3) : [];
-  const clientKey = String(body.clientApiKey || '').trim();
-
+  const promptText = String(body.prompt || '').trim().slice(0, MAX_PROMPT_CHARS);
+  const images = Array.isArray(body.images) ? body.images.slice(0, MAX_IMAGES) : [];
   if (!promptText || !images.length) {
-    return { statusCode: 400, headers, body: JSON.stringify({ error: 'Aucune image fournie pour l\'analyse' }) };
+    return reply(400, { error: 'Aucune image fournie pour l\'analyse' });
   }
 
-  // Récupérer automatiquement TOUTES les clés Gemini présentes dans les variables d'environnement Netlify
-  // (GEMINI_API_KEY, GEMINI_API_KEY_1, GEMINI_API_KEY_2, GEMINI_API_KEY_3, GEMINI_KEY_1, etc.)
-  const envKeys = [];
-  if (clientKey) envKeys.push(clientKey);
-
-  Object.entries(process.env || {}).forEach(([k, v]) => {
-    if (/gemini/i.test(k) && v && typeof v === 'string') {
-      v.split(/[,;\s]+/).forEach(part => {
-        const cleaned = part.replace(/^['"]+|['"]+$/g, '').trim();
-        if (cleaned.length >= 20) envKeys.push(cleaned);
-      });
-    }
-  });
-
-  const uniqueKeys = Array.from(new Set(envKeys));
-  if (uniqueKeys.length === 0) {
-    return {
-      statusCode: 503,
-      headers,
-      body: JSON.stringify({
-        error: 'Clé GEMINI_API_KEY_1 non encore active sur ce déploiement Netlify. Après avoir ajouté une variable dans Netlify, fais un nouveau déploiement (git push ou "Trigger deploy" dans Netlify → Deploys) pour l\'activer.'
-      })
-    };
+  const imageParts = buildImageParts(images);
+  if (!imageParts.length) {
+    return reply(400, { error: 'Format d\'image non reconnu' });
   }
 
-  // Rotation aléatoire de l'ordre des clés pour répartir la charge (load-balancing)
-  if (uniqueKeys.length > 1) {
-    const startOffset = Math.floor(Math.random() * uniqueKeys.length);
-    const rotated = uniqueKeys.slice(startOffset).concat(uniqueKeys.slice(0, startOffset));
-    uniqueKeys.splice(0, uniqueKeys.length, ...rotated);
+  const apiKeys = shuffle(collectApiKeys(env));
+  if (!apiKeys.length) {
+    return reply(503, {
+      error: 'Aucune clé Gemini active sur ce déploiement. Ajoute GEMINI_API_KEY_1 dans Netlify puis redéploie le site.'
+    });
   }
 
-  // Construire les blocs d'images avec détection exacte du mimeType (image/jpeg, image/png, image/webp)
-  const imageParts = [];
-  images.forEach(dataUrl => {
-    const str = String(dataUrl || '');
-    const mimeMatch = str.match(/^data:(image\/[a-zA-Z0-9.+-]+);base64,/i);
-    const mimeType = mimeMatch ? mimeMatch[1].toLowerCase() : 'image/jpeg';
-    const base64Data = str.includes(',') ? str.split(',')[1] : str;
-    if (base64Data) {
-      imageParts.push({
-        inline_data: {
-          mime_type: mimeType,
-          data: base64Data
-        }
-      });
-    }
-  });
-
-  if (imageParts.length === 0) {
-    return { statusCode: 400, headers, body: JSON.stringify({ error: 'Format d\'image non reconnu' }) };
-  }
-
-  // Modèles Gemini Vision testés dans l'ordre (compatibles avec toutes les clés Google AI Studio 2025/2026)
-  const modelsToTry = ['gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-2.5-flash-lite', 'gemini-1.5-flash'];
-  let lastErrorMsg = '';
+  const models = parseList(env.GEMINI_MODELS || DEFAULT_MODELS);
   let lastStatus = 500;
+  let lastErrorMsg = '';
+  let attempts = 0;
 
-  for (const apiKey of uniqueKeys) {
-    for (const modelName of modelsToTry) {
+  for (const apiKey of apiKeys) {
+    for (const modelName of models) {
+      if (attempts >= MAX_ATTEMPTS) break;
+      attempts++;
       try {
-        const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${encodeURIComponent(apiKey)}`;
-        const res = await fetch(geminiUrl, {
+        const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(modelName)}:generateContent`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 'Content-Type': 'application/json', 'x-goog-api-key': apiKey },
           body: JSON.stringify({
-            contents: [{
-              parts: [{ text: promptText }, ...imageParts]
-            }],
+            contents: [{ parts: [{ text: promptText }, ...imageParts] }],
             generationConfig: {
               temperature: 0.1,
-              responseMimeType: 'application/json'
+              responseMimeType: 'application/json',
+              responseSchema: SLOT_SCHEMA
             }
           })
         });
@@ -118,34 +167,26 @@ exports.handler = async function(event) {
             .map(p => p.text || '')
             .join('\n')
             .trim();
-          if (text) {
-            return {
-              statusCode: 200,
-              headers,
-              body: JSON.stringify({ text, provider: modelName })
-            };
-          }
-        } else {
-          lastStatus = res.status;
-          const errJson = await res.json().catch(() => ({}));
-          lastErrorMsg = errJson?.error?.message || `HTTP ${res.status} (${modelName})`;
-          // Si la clé elle-même est invalide (API_KEY_INVALID), inutile de tester les autres modèles avec cette même clé
-          if (res.status === 400 && /API_KEY_INVALID|key not valid/i.test(lastErrorMsg)) {
-            break;
-          }
-          // Si 404 (modèle non dispo sur ce projet) ou 429 (quota atteint sur ce modèle), on tente le modèle suivant
+          if (text) return reply(200, { text, provider: modelName });
+          lastStatus = 502;
+          lastErrorMsg = `Réponse vide (${modelName})`;
+          continue;
         }
+
+        lastStatus = res.status;
+        const errJson = await res.json().catch(() => ({}));
+        lastErrorMsg = errJson?.error?.message || `HTTP ${res.status} (${modelName})`;
+        // Clé invalide : inutile d'essayer d'autres modèles avec cette clé.
+        if (res.status === 400 && /API_KEY_INVALID|key not valid/i.test(lastErrorMsg)) break;
+        // 404 (modèle indisponible) ou 429 (quota) : modèle suivant, sans boucle de réessai.
       } catch (err) {
+        lastStatus = 502;
         lastErrorMsg = err.message || 'Erreur réseau Gemini';
       }
     }
+    if (attempts >= MAX_ATTEMPTS) break;
   }
 
-  return {
-    statusCode: lastStatus || 500,
-    headers,
-    body: JSON.stringify({
-      error: `Erreur Gemini (${lastStatus}) : ${lastErrorMsg || 'Vérifie ta clé GEMINI_API_KEY_1 dans Netlify et redéploie le site.'}`
-    })
-  };
+  const status = lastStatus === 429 ? 429 : (lastStatus >= 400 && lastStatus < 600 ? lastStatus : 502);
+  return reply(status, { error: `Erreur Gemini (${lastStatus}) : ${lastErrorMsg || 'service indisponible'}` });
 };

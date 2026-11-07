@@ -50,7 +50,8 @@ window.factoryResetAll = function() {
 };
 
 window.exportJSON = function() {
-  const blob = new Blob([JSON.stringify(state, null, 2)], { type: 'application/json' });
+  const exported = Object.assign({}, state, { settings: settingsForSync(state.settings) });
+  const blob = new Blob([JSON.stringify(exported, null, 2)], { type: 'application/json' });
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
   a.download = `cockpit_pcsi_${getOffsetDateISO(0)}.json`;
@@ -263,7 +264,7 @@ window.captureScheduleCameraFrame = function() {
   window.renderScheduleDocsGallery();
   if (state.activeTab === 'agenda') renderAgenda();
 
-  stageDocumentForAi(docObj, true);
+  stageDocumentForAi(docObj, false);
 };
 
 // =========================================================
@@ -444,11 +445,12 @@ window.handleScheduleFilesUpload = async function(fileList) {
   if (state.activeTab === 'agenda') renderAgenda();
 
   if (latestDoc) {
-    stageDocumentForAi(latestDoc, true);
+    stageDocumentForAi(latestDoc, false);
   }
 };
 
-function stageDocumentForAi(docObj, autoRunAi = true) {
+// L'analyse IA consomme du quota : elle ne démarre que sur clic du bouton « Convertir avec l'IA ».
+function stageDocumentForAi(docObj, autoRunAi = false) {
   if (!docObj) return;
   stagedScheduleDoc = docObj;
 
@@ -507,6 +509,7 @@ Règles de conversion :
 4. "type" doit être choisi parmi : "COURS", "TD", "TP", "COLLE", "DS".
 5. "title" doit être court et clair (ex: "Cours Maths", "TP Physique", "Colle Anglais", "DS Chimie").
 6. "room" contient la salle ou le nom du colleur si visible (ex: "C204", "Labo 2", "M. Dupont"), sinon "".
+7. N'invente JAMAIS une valeur : si un jour, une heure de début ou une heure de fin est illisible ou absent, mets null pour ce champ.
 
 Réponds UNIQUEMENT avec un objet JSON valide de la forme exacte suivante, sans aucun texte autour ni balise markdown :
 {
@@ -558,19 +561,23 @@ function extractJsonSlotsFromAiResponse(rawText) {
     const validTypes = ['COURS', 'TD', 'TP', 'COLLE', 'DS'];
     const type = validTypes.includes(rawType) ? rawType : matchSlotTypeFromText(`${item.type || ''} ${item.title || ''}`);
 
-    const parseTimeField = (val, fallback) => {
-      if (!val) return fallback;
+    // Aucune valeur inventée : une heure illisible ou incohérente reste null et le créneau est marqué incomplet.
+    const parseTimeField = (val) => {
+      if (val === null || val === undefined || val === '') return null;
       const m = String(val).trim().match(/^(\d{1,2})\s*[:hH]?\s*(\d{2})?$/);
-      if (!m) return fallback;
+      if (!m) return null;
+      const h = parseInt(m[1], 10);
+      const min = parseInt(m[2] || '00', 10);
+      if (h > 23 || min > 59) return null;
       return normalizeHourString(m[1], m[2] || '00');
     };
 
-    const start = parseTimeField(item.start, '08:00');
-    let end = parseTimeField(item.end, '10:00');
-    if (end <= start) {
-      const sH = parseInt(start.split(':')[0], 10) || 8;
-      end = `${String(Math.min(23, sH + (type === 'COLLE' ? 1 : 2))).padStart(2, '0')}:${start.split(':')[1] || '00'}`;
-    }
+    const start = parseTimeField(item.start);
+    let end = parseTimeField(item.end);
+    if (start && end && end <= start) end = null;
+    const missing = [];
+    if (!start) missing.push('début');
+    if (!end) missing.push('fin');
 
     const subjMeta = getSubject(subject);
     const title = (item.title && String(item.title).trim())
@@ -590,16 +597,57 @@ function extractJsonSlotsFromAiResponse(rawText) {
     if (item.date && /^\d{4}-\d{2}-\d{2}$/.test(String(item.date).trim())) {
       slot.date = String(item.date).trim();
     } else {
-      let d = item.dayOfWeek !== undefined ? Number(item.dayOfWeek) : (item.day !== undefined ? Number(item.day) : 0);
-      if (!Number.isFinite(d) || d < 0 || d > 5) d = 0;
-      slot.dayOfWeek = d;
+      // Number(null) vaut 0 (lundi) : on traite explicitement null / vide comme « jour inconnu ».
+      const rawDay = item.dayOfWeek !== undefined ? item.dayOfWeek : item.day;
+      const d = (rawDay === null || rawDay === undefined || rawDay === '') ? NaN : Number(rawDay);
+      if (Number.isInteger(d) && d >= 0 && d <= 5) {
+        slot.dayOfWeek = d;
+      } else {
+        missing.push('jour');
+      }
+    }
+
+    if (missing.length) {
+      slot.incomplete = true;
+      slot.missing = missing;
     }
     return slot;
   }).filter(Boolean);
 }
 
+const AI_MAX_PAGES = 3;
+const AI_CACHE_MAX = 10;
+
+// Empreinte d'un document + consigne : évite de relancer (et de payer en quota) la même analyse.
+async function hashForAiCache(str) {
+  try {
+    if (window.crypto && window.crypto.subtle) {
+      const buf = await window.crypto.subtle.digest('SHA-256', new TextEncoder().encode(str));
+      return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, '0')).join('');
+    }
+  } catch (e) {}
+  let h = 5381;
+  for (let i = 0; i < str.length; i++) h = ((h << 5) + h + str.charCodeAt(i)) | 0;
+  return 'd' + (h >>> 0).toString(16) + '_' + str.length;
+}
+
+function getAiCache(key) {
+  const cache = state.settings && state.settings.aiCache;
+  const entry = cache && cache[key];
+  return entry && typeof entry.text === 'string' ? entry.text : null;
+}
+
+function setAiCache(key, text) {
+  if (!state.settings) return;
+  const cache = Object.assign({}, state.settings.aiCache || {});
+  cache[key] = { text, at: Date.now() };
+  Object.keys(cache).sort((a, b) => cache[b].at - cache[a].at).slice(AI_CACHE_MAX).forEach(k => { delete cache[k]; });
+  state.settings.aiCache = cache;
+  saveState();
+}
+
 async function callVisionAiProviders(doc, promptText) {
-  const images = (doc.pages || []).slice(0, 3);
+  const images = (doc.pages || []).slice(0, AI_MAX_PAGES);
   const localKey = (state.settings && state.settings.aiApiKey) ? state.settings.aiApiKey.trim() : '';
   let netlifyErrorMsg = '';
 
@@ -612,8 +660,7 @@ async function callVisionAiProviders(doc, promptText) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         prompt: promptText,
-        images,
-        clientApiKey: localKey
+        images
       })
     });
     if (netlifyRes.ok) {
@@ -640,12 +687,12 @@ async function callVisionAiProviders(doc, promptText) {
       }
     });
 
-    const modelsToTry = ['gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-2.5-flash-lite', 'gemini-1.5-flash'];
+    const modelsToTry = ['gemini-2.5-flash-lite', 'gemini-2.5-flash'];
     for (const modelName of modelsToTry) {
-      const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${encodeURIComponent(localKey)}`;
+      const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent`;
       const res = await fetch(geminiUrl, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', 'x-goog-api-key': localKey },
         body: JSON.stringify({
           contents: [{ parts: [{ text: promptText }, ...imageParts] }],
           generationConfig: { temperature: 0.1, responseMimeType: 'application/json' }
@@ -694,8 +741,20 @@ window.analyzeStagedDocWithAI = async function() {
 
   try {
     const prompt = buildScheduleVisionPrompt(stagedScheduleDoc, userHint);
-    const aiRawText = await callVisionAiProviders(stagedScheduleDoc, prompt);
+    if (stagedScheduleDoc.pages.length > AI_MAX_PAGES) {
+      showToast(`Seules les ${AI_MAX_PAGES} premières pages sur ${stagedScheduleDoc.pages.length} sont analysées`);
+    }
+    // La date du jour est dans le prompt : la clé de cache n'en dépend donc pas.
+    const cacheKey = await hashForAiCache([
+      stagedScheduleDoc.pages.slice(0, AI_MAX_PAGES).join('|'),
+      stagedScheduleDoc.category || '',
+      userHint,
+      (stagedScheduleDoc.pdfHintText || '').slice(0, 2500)
+    ].join('::'));
+    const cachedText = getAiCache(cacheKey);
+    const aiRawText = cachedText || await callVisionAiProviders(stagedScheduleDoc, prompt);
     const slots = extractJsonSlotsFromAiResponse(aiRawText);
+    if (slots.length && !cachedText) setAiCache(cacheKey, aiRawText);
 
     if (!slots.length) {
       // Fallback si le PDF avait du texte structuré direct
@@ -747,16 +806,24 @@ function renderStagedAiSlotsPreview() {
 
   card.style.display = 'block';
   if (titleEl) {
-    titleEl.innerHTML = `<i class="ph-bold ph-check-circle"></i> ${stagedAiSlots.length} créneau${stagedAiSlots.length > 1 ? 'x' : ''} prêt${stagedAiSlots.length > 1 ? 's' : ''} à importer`;
+    const incompleteCount = stagedAiSlots.filter(sl => sl.incomplete).length;
+    const readyCount = stagedAiSlots.length - incompleteCount;
+    titleEl.innerHTML = `<i class="ph-bold ph-check-circle"></i> ${readyCount} créneau${readyCount > 1 ? 'x' : ''} prêt${readyCount > 1 ? 's' : ''} à importer`
+      + (incompleteCount ? ` <span style="color:#F59E0B;">· ${incompleteCount} incomplet${incompleteCount > 1 ? 's' : ''} (ignoré${incompleteCount > 1 ? 's' : ''} à l'import)</span>` : '');
   }
 
   listEl.innerHTML = stagedAiSlots.map((sl, idx) => {
     const s = getSubject(sl.subject);
-    const dayStr = sl.date ? sl.date : DAYS_LABELS[sl.dayOfWeek || 0];
+    const dayStr = sl.date ? sl.date : (sl.dayOfWeek !== undefined ? DAYS_LABELS[sl.dayOfWeek] : 'Jour ?');
+    const timeStr = `${sl.start || '??:??'}–${sl.end || '??:??'}`;
+    const warn = sl.incomplete
+      ? `<span class="mono" style="font-size:9.5px; padding:1px 5px; border-radius:4px; background:rgba(245,158,11,0.18); color:#F59E0B;" title="Valeur illisible : ${escapeHtml((sl.missing || []).join(', '))}">À corriger : ${escapeHtml((sl.missing || []).join(', '))}</span>`
+      : '';
     return `
-      <div style="display:flex; justify-content:space-between; align-items:center; gap:8px; padding:6px 10px; border-radius:8px; background:rgba(255,255,255,0.035); border-left:3px solid ${s.color}; font-size:11.5px;">
+      <div style="display:flex; justify-content:space-between; align-items:center; gap:8px; padding:6px 10px; border-radius:8px; background:${sl.incomplete ? 'rgba(245,158,11,0.08)' : 'rgba(255,255,255,0.035)'}; border-left:3px solid ${sl.incomplete ? '#F59E0B' : s.color}; font-size:11.5px;">
         <div style="display:flex; align-items:center; gap:7px; min-width:0; flex-wrap:wrap;">
-          <strong class="mono" style="color:var(--text-main);">${escapeHtml(dayStr)} · ${sl.start}–${sl.end}</strong>
+          <strong class="mono" style="color:var(--text-main);">${escapeHtml(dayStr)} · ${escapeHtml(timeStr)}</strong>
+          ${warn}
           <span style="color:${s.color}; font-weight:700; font-size:10.5px;">[${escapeHtml(s.short)}]</span>
           <span style="color:var(--text-main); font-weight:600;">${escapeHtml(sl.title)}</span>
           ${sl.room ? `<span class="mono" style="font-size:10px; color:var(--text-muted);">(${escapeHtml(sl.room)})</span>` : ''}
@@ -782,11 +849,17 @@ window.commitAiScheduleSlots = function(replaceExisting = false) {
     showToast('Aucun créneau à importer');
     return;
   }
-  const count = stagedAiSlots.length;
+  const readySlots = stagedAiSlots.filter(sl => !sl.incomplete);
+  const skipped = stagedAiSlots.length - readySlots.length;
+  if (!readySlots.length) {
+    showToast('Tous les créneaux sont incomplets : relance l\'analyse avec une consigne ou une photo plus nette');
+    return;
+  }
+  const count = readySlots.length;
   if (replaceExisting) {
-    state.schedule = stagedAiSlots.slice();
+    state.schedule = readySlots.slice();
   } else {
-    state.schedule = state.schedule.concat(stagedAiSlots);
+    state.schedule = state.schedule.concat(readySlots);
   }
   const jsonArea = document.getElementById('schedule-json-textarea');
   if (jsonArea) jsonArea.value = JSON.stringify(state.schedule, null, 2);
@@ -796,7 +869,7 @@ window.commitAiScheduleSlots = function(replaceExisting = false) {
   saveState();
   closeScheduleImportModal();
   renderAgenda();
-  showToast(`${count} créneau${count > 1 ? 'x' : ''} importé${count > 1 ? 's' : ''} dans l'agenda !`);
+  showToast(`${count} créneau${count > 1 ? 'x' : ''} importé${count > 1 ? 's' : ''} dans l'agenda !` + (skipped ? ` (${skipped} incomplet${skipped > 1 ? 's' : ''} ignoré${skipped > 1 ? 's' : ''})` : ''));
 };
 
 window.extractSlotsFromDoc = function(docId) {
@@ -805,7 +878,7 @@ window.extractSlotsFromDoc = function(docId) {
   window.closeScheduleDocViewer();
   document.getElementById('schedule-import-modal').classList.add('open');
   window.switchScheduleImportTab('files');
-  stageDocumentForAi(doc, true);
+  stageDocumentForAi(doc, false);
 };
 
 // =========================================================

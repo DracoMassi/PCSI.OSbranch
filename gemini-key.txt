@@ -1,3 +1,0 @@
-# Colle ta clé Google Gemini (AI Studio) sur la ligne ci-dessous :
-# Si tu en as plusieurs, mets-en une par ligne.
-
