@@ -195,6 +195,202 @@ window.toggleCultureGAccordion = function() {
   }
 };
 
+let currentDropAnkiItems = [];
+
+function registerAnkiItem(front, back, tag = 'Vocabulaire') {
+  const idx = currentDropAnkiItems.length;
+  currentDropAnkiItems.push({ front: String(front || ''), back: String(back || ''), tag });
+  return idx;
+}
+
+function renderAnkiTriggerBtn(ankiIdx, label = '+ Anki') {
+  return `<button type="button" onclick="event.stopPropagation(); window.openAnkiPopinByIndex(${ankiIdx})" class="btn-ghost dd-anki-btn mono" style="padding:2px 8px; font-size:10.5px; font-weight:700; color:#38BDF8; border-color:rgba(56,189,248,0.32); background:rgba(56,189,248,0.08); border-radius:6px;" title="Envoyer vers Anki via AnkiConnect (localhost:8765)">[${escapeHtml(label)}]</button>`;
+}
+
+function ensureAnkiModalMounted() {
+  if (document.getElementById('anki-modal')) return;
+  const modal = document.createElement('div');
+  modal.id = 'anki-modal';
+  modal.className = 'modal-backdrop';
+  modal.innerHTML = `
+    <div class="modal-box" style="max-width:480px;">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px;">
+        <div style="display:flex; align-items:center; gap:9px;">
+          <span style="width:32px; height:32px; border-radius:9px; background:rgba(56,189,248,0.14); border:1px solid rgba(56,189,248,0.32); color:#38BDF8; display:inline-flex; align-items:center; justify-content:center; font-size:16px;">
+            <i class="ph-bold ph-cards"></i>
+          </span>
+          <div>
+            <h3 style="font-size:15px; font-weight:700;">Ajouter à Anki (AnkiConnect)</h3>
+            <div class="mono" style="font-size:10.5px; color:var(--text-subtle);">POST http://localhost:8765 · Note Type : Basic</div>
+          </div>
+        </div>
+        <button type="button" onclick="window.closeAnkiModal()" class="btn-ghost" style="padding:4px 7px; border:none;"><i class="ph ph-x"></i></button>
+      </div>
+      <form onsubmit="window.submitAnkiCard(event)" style="display:flex; flex-direction:column; gap:12px;">
+        <div>
+          <label style="font-size:11.5px; font-weight:600; color:var(--text-muted); display:flex; justify-content:space-between; margin-bottom:4px;">
+            <span>Target Anki Deck <small style="color:var(--text-subtle);">(Syntaxe Parent::Enfant)</small></span>
+            <span class="mono" style="font-size:10px; color:#38BDF8;">Défaut : PCSI::Vocabulaire</span>
+          </label>
+          <input type="text" id="anki-deck-input" class="saas-input mono" placeholder="PCSI::Vocabulaire" />
+        </div>
+        <div>
+          <label style="font-size:11.5px; font-weight:600; color:var(--text-muted); display:block; margin-bottom:4px;">Front (Recto — Mot, Expression ou Notion) *</label>
+          <input type="text" id="anki-front-input" class="saas-input" required />
+        </div>
+        <div>
+          <label style="font-size:11.5px; font-weight:600; color:var(--text-muted); display:block; margin-bottom:4px;">Back (Verso — Traduction, Définition &amp; Exemple) *</label>
+          <textarea id="anki-back-input" class="saas-input" rows="4" style="resize:vertical;" required></textarea>
+        </div>
+        <div id="anki-modal-status" style="display:none; font-size:11.5px; padding:8px 10px; border-radius:8px;"></div>
+        <div style="display:flex; justify-content:flex-end; gap:8px; margin-top:4px;">
+          <button type="button" onclick="window.closeAnkiModal()" class="btn-ghost">Annuler</button>
+          <button type="submit" id="anki-submit-btn" class="btn-primary">
+            <i class="ph-bold ph-paper-plane-tilt"></i> <span>Ajouter la carte</span>
+          </button>
+        </div>
+      </form>
+    </div>
+  `;
+  modal.addEventListener('click', (e) => {
+    if (e.target === modal) window.closeAnkiModal();
+  });
+  document.body.appendChild(modal);
+}
+
+window.openAnkiModal = function(front = '', back = '', customDeck = null) {
+  ensureAnkiModalMounted();
+  const cfg = (typeof state !== 'undefined' && state.settings) ? state.settings : DEFAULT_SETTINGS;
+  const targetDeck = String(customDeck || cfg.ankiDeck || 'PCSI::Vocabulaire').trim() || 'PCSI::Vocabulaire';
+
+  const deckEl = document.getElementById('anki-deck-input');
+  const frontEl = document.getElementById('anki-front-input');
+  const backEl = document.getElementById('anki-back-input');
+  const statusEl = document.getElementById('anki-modal-status');
+
+  if (deckEl) deckEl.value = targetDeck;
+  if (frontEl) frontEl.value = front || '';
+  if (backEl) backEl.value = back || '';
+  if (statusEl) {
+    statusEl.style.display = 'none';
+    statusEl.textContent = '';
+  }
+
+  const m = document.getElementById('anki-modal');
+  if (m) m.classList.add('open');
+  if (typeof window.focusModalInput === 'function') window.focusModalInput('anki-front-input');
+};
+
+window.openAnkiPopinByIndex = function(idx) {
+  const item = currentDropAnkiItems[idx];
+  if (!item) return;
+  window.openAnkiModal(item.front, item.back);
+};
+
+window.closeAnkiModal = function() {
+  const m = document.getElementById('anki-modal');
+  if (m) m.classList.remove('open');
+};
+
+window.submitAnkiCard = async function(e) {
+  if (e) e.preventDefault();
+  const deckEl = document.getElementById('anki-deck-input');
+  const frontEl = document.getElementById('anki-front-input');
+  const backEl = document.getElementById('anki-back-input');
+  const btn = document.getElementById('anki-submit-btn');
+  const statusEl = document.getElementById('anki-modal-status');
+
+  const deckName = String(deckEl ? deckEl.value : '').trim() || 'PCSI::Vocabulaire';
+  const frontRaw = String(frontEl ? frontEl.value : '').trim();
+  const backRaw = String(backEl ? backEl.value : '').trim();
+
+  if (!frontRaw || !backRaw) {
+    showToast('Renseigne le Recto (Front) et le Verso (Back)');
+    return;
+  }
+
+  // Sauvegarder le deck cible s'il a été personnalisé
+  if (typeof state !== 'undefined' && state.settings) {
+    state.settings.ankiDeck = deckName;
+    if (typeof saveState === 'function') saveState();
+  }
+
+  const frontHtml = escapeHtml(frontRaw).replace(/\r?\n/g, '<br>');
+  const backHtml = escapeHtml(backRaw).replace(/\r?\n/g, '<br>');
+
+  if (btn) {
+    btn.disabled = true;
+    btn.innerHTML = `<i class="ph-bold ph-spinner"></i> <span>Connexion à Anki...</span>`;
+  }
+
+  try {
+    // 1. Créer le deck (supporte la hiérarchie Parent::Child) au cas où il n'existe pas encore dans Anki
+    await fetch('http://localhost:8765', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        action: 'createDeck',
+        version: 6,
+        params: { deck: deckName }
+      })
+    });
+
+    // 2. Appel addNote via AnkiConnect
+    const res = await fetch('http://localhost:8765', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        action: 'addNote',
+        version: 6,
+        params: {
+          note: {
+            deckName,
+            modelName: 'Basic',
+            fields: {
+              Front: frontHtml,
+              Back: backHtml
+            },
+            options: {
+              allowDuplicate: false,
+              duplicateScope: 'deck'
+            },
+            tags: ['pcsi_os', 'daily_drop']
+          }
+        }
+      })
+    });
+
+    const data = await res.json();
+    if (data && data.error) {
+      if (statusEl) {
+        statusEl.style.display = 'block';
+        statusEl.style.background = 'rgba(245, 158, 11, 0.14)';
+        statusEl.style.border = '1px solid rgba(245, 158, 11, 0.35)';
+        statusEl.style.color = '#FBBF24';
+        statusEl.textContent = `AnkiConnect : ${data.error}`;
+      }
+      showToast(`Anki : ${data.error}`);
+    } else {
+      window.closeAnkiModal();
+      showToast(`Carte ajoutée dans Anki (${deckName}) ✓`);
+    }
+  } catch (err) {
+    if (statusEl) {
+      statusEl.style.display = 'block';
+      statusEl.style.background = 'rgba(239, 68, 68, 0.12)';
+      statusEl.style.border = '1px solid rgba(239, 68, 68, 0.35)';
+      statusEl.style.color = '#FCA5A5';
+      statusEl.innerHTML = `Impossible de joindre <b>http://localhost:8765</b>. Vérifie qu'<b>Anki</b> est ouvert sur ton ordinateur avec l'extension <b>AnkiConnect</b> (code <code class="mono">2055492159</code>).`;
+    }
+    showToast('Anki non détecté sur localhost:8765 (vérifie qu\'Anki est ouvert)');
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      btn.innerHTML = `<i class="ph-bold ph-paper-plane-tilt"></i> <span>Ajouter la carte</span>`;
+    }
+  }
+};
+
 function renderDailyDrop() {
   try { localStorage.setItem(DAILY_DROP_SEEN_KEY, formatDateISO(new Date())); } catch (e) {}
   updateDailyDropBadges(false);
@@ -202,6 +398,8 @@ function renderDailyDrop() {
 
   const mount = document.getElementById('daily-drop-mount');
   if (!mount) return;
+  currentDropAnkiItems = [];
+
   const data = dailyCultureData || FALLBACK_DAILY_CULTURE;
   const drops = (data && Array.isArray(data.drops) && data.drops.length) ? data.drops : FALLBACK_DAILY_CULTURE.drops;
   const drop = drops[currentDropIndex] || drops[0];
@@ -218,45 +416,82 @@ function renderDailyDrop() {
 
   const focusMode = currentFocusTab || f.defaultMode || 'grammar';
 
+  // Enregistrer le Word of the Day pour AnkiConnect
+  const wotdBackParts = [w.meaning || ''];
+  if (w.example) wotdBackParts.push(`Ex: "${w.example}"`);
+  if (w.exampleTranslation) wotdBackParts.push(`→ ${w.exampleTranslation}`);
+  const wotdAnkiIdx = registerAnkiItem(
+    `${w.word || ''}${w.phonetic ? ' ' + w.phonetic : ''}`,
+    wotdBackParts.filter(Boolean).join('\n')
+  );
+
+  // Enregistrer la notion de Culture G pour AnkiConnect
+  const cgAnkiIdx = registerAnkiItem(
+    cg.title || 'Notion Culture G',
+    `${cg.hook || ''}${cg.category ? '\n[' + cg.category + ']' : ''}`
+  );
+
   const focusContentHtml = focusMode === 'vocab'
     ? `
       <div style="display:flex; flex-direction:column; gap:8px;">
-        ${(f.topicalWords || []).map((item, idx) => `
-          <div class="dd-vocab-row">
-            <div style="display:flex; justify-content:space-between; align-items:baseline; gap:10px; flex-wrap:wrap;">
-              <span style="font-weight:700; font-size:13.5px; color:#F8FAFC;">
-                <span class="mono" style="font-size:11px; color:#EAB308; margin-right:6px;">0${idx + 1}.</span>${escapeHtml(item.term)}
-              </span>
-              <span style="font-size:12.5px; font-weight:600; color:#38BDF8;">${escapeHtml(item.translation)}</span>
+        ${(f.topicalWords || []).map((item, idx) => {
+          const itemAnkiIdx = registerAnkiItem(
+            item.term,
+            `${item.translation || ''}${item.note ? '\nNote : ' + item.note : ''}`
+          );
+          return `
+            <div class="dd-vocab-row">
+              <div style="display:flex; justify-content:space-between; align-items:center; gap:10px; flex-wrap:wrap;">
+                <span style="font-weight:700; font-size:13.5px; color:#F8FAFC;">
+                  <span class="mono" style="font-size:11px; color:#EAB308; margin-right:6px;">0${idx + 1}.</span>${escapeHtml(item.term)}
+                </span>
+                <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+                  <span style="font-size:12.5px; font-weight:600; color:#38BDF8;">${escapeHtml(item.translation)}</span>
+                  ${renderAnkiTriggerBtn(itemAnkiIdx)}
+                </div>
+              </div>
+              ${item.note ? `<div style="font-size:11.5px; color:var(--text-muted); margin-top:3px; font-style:italic;">${escapeHtml(item.note)}</div>` : ''}
             </div>
-            ${item.note ? `<div style="font-size:11.5px; color:var(--text-muted); margin-top:3px; font-style:italic;">${escapeHtml(item.note)}</div>` : ''}
-          </div>
-        `).join('')}
+          `;
+        }).join('')}
       </div>
     `
     : `
       <div style="display:flex; flex-direction:column; gap:12px;">
-        ${(f.grammarTraps || []).map((gt, idx) => `
-          <div class="dd-grammar-card">
-            <div style="display:flex; align-items:center; gap:8px; margin-bottom:6px; flex-wrap:wrap;">
-              <span class="mono" style="font-size:10.5px; font-weight:700; padding:2px 7px; border-radius:6px; background:rgba(239, 68, 68, 0.16); border:1px solid rgba(239, 68, 68, 0.35); color:#F87171;">PIÈGE #${idx + 1}</span>
-              <span style="font-weight:700; font-size:13.5px; color:var(--text-main);">${escapeHtml(gt.title)}</span>
-            </div>
-            <p style="font-size:12.5px; color:var(--text-muted); line-height:1.55; margin-bottom:10px;">${escapeHtml(gt.rule)}</p>
-            <div class="dd-trap-compare-grid" style="display:grid; grid-template-columns:repeat(auto-fit, minmax(210px, 1fr)); gap:8px;">
-              <div style="padding:8px 10px; border-radius:8px; background:rgba(239, 68, 68, 0.08); border:1px solid rgba(239, 68, 68, 0.22); font-size:12px;">
-                <div class="mono" style="font-size:10px; font-weight:700; color:#F87171; margin-bottom:2px;">✗ ERREUR CLASSIQUE</div>
-                <div style="color:#FCA5A5; text-decoration:line-through;">${escapeHtml(gt.wrong)}</div>
+        ${(f.grammarTraps || []).map((gt, idx) => {
+          const gtAnkiIdx = registerAnkiItem(
+            gt.title,
+            `${gt.rule || ''}\n✓ ${gt.right || ''}\n(✗ ${gt.wrong || ''})`
+          );
+          return `
+            <div class="dd-grammar-card">
+              <div style="display:flex; align-items:center; justify-content:space-between; gap:8px; margin-bottom:6px; flex-wrap:wrap;">
+                <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+                  <span class="mono" style="font-size:10.5px; font-weight:700; padding:2px 7px; border-radius:6px; background:rgba(239, 68, 68, 0.16); border:1px solid rgba(239, 68, 68, 0.35); color:#F87171;">PIÈGE #${idx + 1}</span>
+                  <span style="font-weight:700; font-size:13.5px; color:var(--text-main);">${escapeHtml(gt.title)}</span>
+                </div>
+                ${renderAnkiTriggerBtn(gtAnkiIdx)}
               </div>
-              <div style="padding:8px 10px; border-radius:8px; background:rgba(16, 185, 129, 0.08); border:1px solid rgba(16, 185, 129, 0.25); font-size:12px;">
-                <div class="mono" style="font-size:10px; font-weight:700; color:#34D399; margin-bottom:2px;">✓ BON ANGLAIS</div>
-                <div style="color:#D1FAE5; font-weight:600;">${escapeHtml(gt.right)}</div>
+              <p style="font-size:12.5px; color:var(--text-muted); line-height:1.55; margin-bottom:10px;">${escapeHtml(gt.rule)}</p>
+              <div class="dd-trap-compare-grid" style="display:grid; grid-template-columns:repeat(auto-fit, minmax(210px, 1fr)); gap:8px;">
+                <div style="padding:8px 10px; border-radius:8px; background:rgba(239, 68, 68, 0.08); border:1px solid rgba(239, 68, 68, 0.22); font-size:12px;">
+                  <div class="mono" style="font-size:10px; font-weight:700; color:#F87171; margin-bottom:2px;">✗ ERREUR CLASSIQUE</div>
+                  <div style="color:#FCA5A5; text-decoration:line-through;">${escapeHtml(gt.wrong)}</div>
+                </div>
+                <div style="padding:8px 10px; border-radius:8px; background:rgba(16, 185, 129, 0.08); border:1px solid rgba(16, 185, 129, 0.25); font-size:12px;">
+                  <div class="mono" style="font-size:10px; font-weight:700; color:#34D399; margin-bottom:2px;">✓ BON ANGLAIS</div>
+                  <div style="color:#D1FAE5; font-weight:600;">${escapeHtml(gt.right)}</div>
+                </div>
               </div>
             </div>
-          </div>
-        `).join('')}
+          `;
+        }).join('')}
       </div>
     `;
+
+  const currentDeckBadge = (typeof state !== 'undefined' && state.settings && state.settings.ankiDeck)
+    ? state.settings.ankiDeck
+    : 'PCSI::Vocabulaire';
 
   mount.innerHTML = `
     <!-- BARRE D'ÉDITION DU JOUR -->
@@ -269,6 +504,7 @@ function renderDailyDrop() {
           <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
             <span class="mono" style="font-size:10.5px; font-weight:700; color:#FACC15; text-transform:uppercase; letter-spacing:0.06em;">DAILY DROP · ÉDITION #${currentDropIndex + 1}/${drops.length}</span>
             ${isTodayEdition ? `<span class="mono" style="font-size:10px; padding:1px 7px; border-radius:99px; background:rgba(16,185,129,0.16); border:1px solid rgba(16,185,129,0.35); color:#34D399;">AUJOURD'HUI</span>` : ''}
+            <span class="mono" style="font-size:10px; padding:1px 7px; border-radius:99px; background:rgba(56,189,248,0.12); border:1px solid rgba(56,189,248,0.3); color:#38BDF8;" title="Deck Anki cible configurable dans les Paramètres">Deck : ${escapeHtml(currentDeckBadge)}</span>
           </div>
           <h2 style="font-size:15.5px; font-weight:700; color:var(--text-main);">${escapeHtml(drop.theme || 'English & Humanités CPGE')}</h2>
         </div>
@@ -286,11 +522,14 @@ function renderDailyDrop() {
       <!-- 1. WORD OF THE DAY (ENGLISH) -->
       <div class="saas-card dd-card" style="padding:20px 22px; display:flex; flex-direction:column; justify-content:space-between; border-top:2px solid #EAB308;">
         <div>
-          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px; gap:8px; flex-wrap:wrap;">
             <span class="mono" style="font-size:10.5px; font-weight:700; color:#EAB308; text-transform:uppercase; letter-spacing:0.06em;">
               <i class="ph-bold ph-translate"></i> Word of the Day · English
             </span>
-            <span class="mono" style="font-size:11px; color:var(--text-subtle);">${escapeHtml(w.partOfSpeech || 'noun')}</span>
+            <div style="display:flex; align-items:center; gap:8px;">
+              <span class="mono" style="font-size:11px; color:var(--text-subtle);">${escapeHtml(w.partOfSpeech || 'noun')}</span>
+              ${renderAnkiTriggerBtn(wotdAnkiIdx)}
+            </div>
           </div>
 
           <div style="display:flex; align-items:baseline; gap:12px; flex-wrap:wrap; margin-bottom:6px;">
@@ -312,9 +551,15 @@ function renderDailyDrop() {
         <div>
           <div class="mono" style="font-size:10.5px; font-weight:700; color:var(--text-subtle); text-transform:uppercase; margin-bottom:8px;">Expressions prêtes à l'emploi</div>
           <div style="display:flex; flex-wrap:wrap; gap:6px;">
-            ${(w.collocations || []).map(col => `
-              <span class="mono" style="font-size:11.5px; padding:4px 9px; border-radius:7px; background:rgba(234, 179, 8, 0.1); border:1px solid rgba(234, 179, 8, 0.25); color:#FEF08A;">${escapeHtml(col)}</span>
-            `).join('')}
+            ${(w.collocations || []).map(col => {
+              const colAnkiIdx = registerAnkiItem(col, `${w.word || ''} — ${w.meaning || ''}`);
+              return `
+                <span class="mono" style="display:inline-flex; align-items:center; gap:6px; font-size:11.5px; padding:4px 9px; border-radius:7px; background:rgba(234, 179, 8, 0.1); border:1px solid rgba(234, 179, 8, 0.25); color:#FEF08A;">
+                  <span>${escapeHtml(col)}</span>
+                  <button type="button" onclick="event.stopPropagation(); window.openAnkiPopinByIndex(${colAnkiIdx})" style="background:none; border:none; color:#38BDF8; font-weight:800; font-size:10px; cursor:pointer; padding:0;" title="Ajouter cette expression à Anki">[+ Anki]</button>
+                </span>
+              `;
+            }).join('')}
           </div>
         </div>
       </div>
@@ -350,9 +595,12 @@ function renderDailyDrop() {
             <span class="mono" style="font-size:10.5px; font-weight:700; color:#C084FC; text-transform:uppercase; letter-spacing:0.06em;">
               <i class="ph-bold ph-feather"></i> Culture G de Niche · Lettres, Histoire &amp; Philosophie
             </span>
-            <span class="mono" style="font-size:10.5px; padding:2px 8px; border-radius:6px; background:rgba(168, 85, 247, 0.15); border:1px solid rgba(168, 85, 247, 0.3); color:#D8B4FE;">
-              ${escapeHtml(cg.category || 'Philosophie & Histoire')}
-            </span>
+            <div style="display:flex; align-items:center; gap:6px;">
+              <span class="mono" style="font-size:10.5px; padding:2px 8px; border-radius:6px; background:rgba(168, 85, 247, 0.15); border:1px solid rgba(168, 85, 247, 0.3); color:#D8B4FE;">
+                ${escapeHtml(cg.category || 'Philosophie & Histoire')}
+              </span>
+              ${renderAnkiTriggerBtn(cgAnkiIdx)}
+            </div>
           </div>
 
           <h3 style="font-size:16.5px; font-weight:700; color:var(--text-main); line-height:1.35; margin-bottom:10px;">

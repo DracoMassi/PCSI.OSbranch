@@ -17,7 +17,8 @@ let state = {
     manualOrder: [],
     excludedIds: [],
     customDurations: {},
-    pinnedEveningIds: []
+    pinnedEveningIds: [],
+    naps: {}
   },
   tasks: [],
   schedule: [],
@@ -99,15 +100,22 @@ function normalizeSettingsState() {
   state.settings.dinnerEnd = state.settings.dinnerEnd || '20:00';
   state.settings.bedtime = state.settings.bedtime || '23:00';
   state.settings.defaultClassEnd = state.settings.defaultClassEnd || '17:30';
+  const buf = parseInt(state.settings.commuteBufferMin, 10);
+  state.settings.commuteBufferMin = Number.isFinite(buf) ? Math.min(120, Math.max(0, buf)) : 30;
+  const rawDeck = String(state.settings.ankiDeck || '').trim();
+  state.settings.ankiDeck = rawDeck || 'PCSI::Vocabulaire';
 
   if (!state.eveningPlan || typeof state.eveningPlan !== 'object') {
-    state.eveningPlan = { manualOrder: [], excludedIds: [], customDurations: {}, pinnedEveningIds: [] };
+    state.eveningPlan = { manualOrder: [], excludedIds: [], customDurations: {}, pinnedEveningIds: [], naps: {} };
   }
   if (!Array.isArray(state.eveningPlan.manualOrder)) state.eveningPlan.manualOrder = [];
   if (!Array.isArray(state.eveningPlan.excludedIds)) state.eveningPlan.excludedIds = [];
   if (!Array.isArray(state.eveningPlan.pinnedEveningIds)) state.eveningPlan.pinnedEveningIds = [];
   if (!state.eveningPlan.customDurations || typeof state.eveningPlan.customDurations !== 'object') {
     state.eveningPlan.customDurations = {};
+  }
+  if (!state.eveningPlan.naps || typeof state.eveningPlan.naps !== 'object' || Array.isArray(state.eveningPlan.naps)) {
+    state.eveningPlan.naps = {};
   }
   if (!Array.isArray(state.scheduleDocs)) {
     state.scheduleDocs = [];

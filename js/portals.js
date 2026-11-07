@@ -160,11 +160,21 @@ window.setDsSubjectOverride = function(val) {
 
 window.updateSettingValue = function(key, val) {
   if (!state.settings) state.settings = JSON.parse(JSON.stringify(DEFAULT_SETTINGS));
-  state.settings[key] = val;
+  if (key === 'commuteBufferMin') {
+    const num = parseInt(val, 10);
+    state.settings.commuteBufferMin = Number.isFinite(num) ? Math.min(120, Math.max(0, num)) : 30;
+  } else if (key === 'ankiDeck') {
+    const cleanDeck = String(val || '').trim();
+    state.settings.ankiDeck = cleanDeck || 'PCSI::Vocabulaire';
+    showToast(`Deck Anki cible : ${state.settings.ankiDeck}`);
+  } else {
+    state.settings[key] = val;
+  }
   saveState();
   window.renderSettingsPanel();
   if (state.activeTab === 'agenda') renderAgenda();
   if (state.activeTab === 'cahier') renderCahier();
+  if (state.activeTab === 'dailydrop' && typeof renderDailyDrop === 'function') renderDailyDrop();
 };
 
 window.onTypeMultiplierInput = function(typeId, val) {
@@ -532,15 +542,15 @@ window.renderSettingsPanel = function() {
         </div>
       </div>
 
-      <!-- SECTION 2 : RYTHME DE VIE & PLANNING SOIRÉE -->
+      <!-- SECTION 2 : AFTER-HOURS ENGINE & INTÉGRATION ANKICONNECT -->
       <div class="saas-card settings-card">
         <div class="settings-card-head">
           <div class="settings-card-ico" style="color:#A855F7; background:rgba(168,85,247,0.12); border-color:rgba(168,85,247,0.28);">
-            <i class="ph-bold ph-moon-stars"></i>
+            <i class="ph-bold ph-cpu"></i>
           </div>
           <div>
-            <h3 style="font-size:14.5px; font-weight:700;">Rythme de Vie &amp; Planning Soirée</h3>
-            <p style="font-size:11.5px; color:var(--text-muted);">Paramètres horaires du planificateur nocturne d'internat (Knapsack)</p>
+            <h3 style="font-size:14.5px; font-weight:700;">After-Hours Engine &amp; AnkiConnect</h3>
+            <p style="font-size:11.5px; color:var(--text-muted);">Enveloppe horaire dynamique, buffer de trajet et deck Anki cible</p>
           </div>
         </div>
 
@@ -568,9 +578,20 @@ window.renderSettingsPanel = function() {
           </div>
           <div>
             <label style="font-size:11.5px; font-weight:600; color:var(--text-muted); display:block; margin-bottom:5px;">
-              <i class="ph-bold ph-graduation-cap" style="color:#38BDF8;"></i> Fin des cours par défaut
+              <i class="ph-bold ph-person-simple-walk" style="color:#34D399;"></i> Buffer Trajet / Transition (min)
             </label>
-            <input type="time" class="saas-input mono" value="${escapeHtml(cfg.defaultClassEnd || '17:30')}" onchange="window.updateSettingValue('defaultClassEnd', this.value)" />
+            <input type="number" min="0" max="120" step="5" class="saas-input mono" value="${Number.isFinite(Number(cfg.commuteBufferMin)) ? Number(cfg.commuteBufferMin) : 30}" onchange="window.updateSettingValue('commuteBufferMin', this.value)" />
+          </div>
+        </div>
+
+        <div style="padding-top:10px; border-top:1px solid var(--border-subtle);">
+          <label style="font-size:11.5px; font-weight:600; color:var(--text-muted); display:flex; align-items:center; justify-content:space-between; margin-bottom:5px;">
+            <span><i class="ph-bold ph-cards" style="color:#38BDF8;"></i> Target Anki Deck <small style="color:var(--text-subtle); font-weight:400;">(Syntaxe Parent::Enfant)</small></span>
+            <span class="mono" style="font-size:10px; color:#38BDF8;">localhost:8765</span>
+          </label>
+          <input type="text" id="settings-anki-deck-input" class="saas-input mono" placeholder="PCSI::Vocabulaire (ex: Anglais::Vocabulaire)" value="${escapeHtml(cfg.ankiDeck || 'PCSI::Vocabulaire')}" onchange="window.updateSettingValue('ankiDeck', this.value)" />
+          <div style="font-size:11px; color:var(--text-subtle); margin-top:4px;">
+            Utilisé par les boutons <b>[+ Anki]</b> du Daily Drop. Défaut si vide : <code class="mono">PCSI::Vocabulaire</code>.
           </div>
         </div>
 

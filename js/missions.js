@@ -540,7 +540,7 @@ function renderCahier() {
                 <div class="saas-card kanban-card" draggable="true" ondragstart="window.onKanbanDragStart(event, '${t.id}')" ondragend="window.onKanbanDragEnd(event)" style="border-left:3px solid ${s.color}; ${isDone ? 'opacity:0.5;' : ''}">
                   <div class="k-head">
                     <div class="k-head-l" style="flex-wrap:wrap;">
-                      <span class="k-handle" onpointerdown="window.kPointerDown(event, '${t.id}')"><i class="ph-bold ph-dots-six-vertical"></i></span>
+                      <span class="k-handle" onpointerdown="window.kPointerDown(event, '${t.id}')" title="Glisser">⠿</span>
                       <button type="button" class="check-touch-zone" onclick="event.stopPropagation(); window.toggleTask('${t.id}', event)" title="${isDone ? 'Marquer comme à faire' : 'Valider'}">
                         <span class="custom-check ${isDone ? 'checked' : ''}">${isDone ? '<i class="ph-bold ph-check text-xs"></i>' : ''}</span>
                       </button>

@@ -1,0 +1,1879 @@
+diff --git a/js/agenda.js b/js/agenda.js
+index 3dd31d2..ea94513 100644
+--- a/js/agenda.js
++++ b/js/agenda.js
+@@ -11,7 +11,6 @@ window.nextWeek = () => { viewedWeekStart = addDays(viewedWeekStart, 7); renderA
+ function goToToday() {
+   const now = new Date();
+   viewedWeekStart = getMonday(now);
+-  if (now.getDay() === 0) viewedWeekStart = addDays(viewedWeekStart, 7);
+   viewedDayIdx = null;
+   lastAgendaDay = formatDateISO(now);
+ }
+@@ -67,10 +66,11 @@ function layoutDaySlots(list) {
+ 
+ function agendaIsMobile() { return window.matchMedia('(max-width: 900px)').matches; }
+ 
+-function getAgendaDay() {
+-  if (viewedDayIdx !== null) return viewedDayIdx;
++function getAgendaDay(allowSunday = false) {
++  const maxIdx = allowSunday ? 6 : 5;
++  if (viewedDayIdx !== null) return Math.min(maxIdx, Math.max(0, viewedDayIdx));
+   const today = new Date();
+-  for (let i = 0; i < 6; i++) {
++  for (let i = 0; i <= maxIdx; i++) {
+     if (formatDateISO(addDays(viewedWeekStart, i)) === formatDateISO(today)) return i;
+   }
+   return 0;
+@@ -82,9 +82,11 @@ window.setAgendaDay = function(i) {
+ };
+ 
+ function stepAgendaDay(delta) {
+-  let d = getAgendaDay() + delta;
+-  if (d > 5) { viewedWeekStart = addDays(viewedWeekStart, 7); d = 0; }
+-  else if (d < 0) { viewedWeekStart = addDays(viewedWeekStart, -7); d = 5; }
++  const isEvening = state.agendaSubTab === 'evening';
++  const maxIdx = isEvening ? 6 : 5;
++  let d = getAgendaDay(isEvening) + delta;
++  if (d > maxIdx) { viewedWeekStart = addDays(viewedWeekStart, 7); d = 0; }
++  else if (d < 0) { viewedWeekStart = addDays(viewedWeekStart, -7); d = maxIdx; }
+   viewedDayIdx = d;
+   renderAgenda();
+ }
+@@ -97,32 +99,308 @@ window.setAgendaSubTab = function(subTab) {
+ 
+ function getDayScheduleSlots(dateObj, dayIdx) {
+   const ds = formatDateISO(dateObj);
++  const isHoliday = typeof isFrenchBankHoliday === 'function' && isFrenchBankHoliday(dateObj);
++  // Sur un jour férié ou dimanche, aucun cours hebdomadaire obligatoire n'est injecté (seuls les événements explicitement datés sur ce jour précis sont conservés)
++  if (isHoliday || dayIdx === 6 || dateObj.getDay() === 0) {
++    return state.schedule.filter(sl => sl.date === ds);
++  }
+   return state.schedule.filter(sl => sl.date === ds || (Number(sl.dayOfWeek) === dayIdx && !sl.date));
+ }
+ 
+-function computeEveningStartMinForDay(dateObj, dayIdx) {
++/**
++ * Détecte si la journée est un week-end sans cours ou un jour férié (Blank Canvas)
++ */
++function getDayCanvasStatus(dateObj, dayIdx, slots) {
++  const holidayName = typeof getFrenchBankHolidayName === 'function' ? getFrenchBankHolidayName(dateObj) : null;
++  const isSunday = dayIdx === 6 || dateObj.getDay() === 0;
++  const isSaturday = dayIdx === 5 || dateObj.getDay() === 6;
++  const hasMandatoryCourses = Array.isArray(slots) && slots.length > 0;
++
++  if (holidayName && !hasMandatoryCourses) {
++    return { isBlankCanvas: true, reason: `Jour férié (${holidayName})`, badge: 'JOUR FÉRIÉ · BLANK CANVAS' };
++  }
++  if (isSunday && !hasMandatoryCourses) {
++    return { isBlankCanvas: true, reason: 'Dimanche (Aucun cours obligatoire)', badge: 'WEEK-END · BLANK CANVAS' };
++  }
++  if (isSaturday && !hasMandatoryCourses) {
++    return { isBlankCanvas: true, reason: 'Samedi libre (Aucun cours)', badge: 'WEEK-END · BLANK CANVAS' };
++  }
++  return { isBlankCanvas: false, reason: null, badge: null };
++}
++
++/**
++ * Feature 1: Dynamic Gap Calculation (After-Hours Engine)
++ * Analyse l'emploi du temps du jour pour détecter :
++ * - Les fins de cours anticipées vs séances tardives (ex: fin des cours à 15:30, colle à 19:00 -> ouvre 16:00-18:30 avec buffer de 30m)
++ * - Les jours Blank Canvas (week-ends / jours fériés sans cours)
++ * - La fenêtre de dîner et la limite de coucher (bedtime)
++ */
++function computeAfterHoursEnvelope(dateObj, dayIdx) {
+   const cfg = state.settings || DEFAULT_SETTINGS;
+-  const defaultStart = timeToMin(cfg.defaultClassEnd || '17:30');
+-  const slots = getDayScheduleSlots(dateObj, dayIdx);
+-  if (!slots.length) return defaultStart;
+-  let maxEnd = 0;
+-  slots.forEach(sl => {
+-    const e = timeToMin(sl.end);
+-    if (e > maxEnd && e <= 21 * 60) maxEnd = e;
++  const bufferMin = Number.isFinite(Number(cfg.commuteBufferMin)) ? Math.max(0, Number(cfg.commuteBufferMin)) : 30;
++  const defaultClassEndMin = timeToMin(cfg.defaultClassEnd || '17:30');
++  const dinnerStartMin = timeToMin(cfg.dinnerStart || '19:00');
++  const dinnerEndMin = Math.max(dinnerStartMin + 15, timeToMin(cfg.dinnerEnd || '20:00'));
++  const bedtimeMin = Math.max(dinnerEndMin + 30, timeToMin(cfg.bedtime || '23:00'));
++
++  const rawSlots = getDayScheduleSlots(dateObj, dayIdx);
++  const canvasStatus = getDayCanvasStatus(dateObj, dayIdx, rawSlots);
++
++  // Trier et normaliser les créneaux académiques du jour
++  const sortedSlots = rawSlots.map(sl => ({
++    raw: sl,
++    start: timeToMin(sl.start),
++    end: Math.max(timeToMin(sl.end), timeToMin(sl.start) + 15),
++    title: sl.title || 'Cours',
++    type: sl.type || 'Cours'
++  })).sort((a, b) => a.start - b.start || a.end - b.end);
++
++  // Cas 1 : Week-end ou Jour Férié (Blank Canvas : aucun cours obligatoire en journée)
++  if (canvasStatus.isBlankCanvas) {
++    const canvasStart = 9 * 60; // 09:00
++    const lunchStart = 12 * 60 + 30; // 12:30
++    const lunchEnd = 13 * 60 + 30;   // 13:30
++    const windows = [];
++    if (canvasStart < lunchStart) {
++      windows.push({ start: canvasStart, end: Math.min(lunchStart, dinnerStartMin), label: 'Session Matin (Blank Canvas)' });
++    }
++    if (lunchEnd < dinnerStartMin) {
++      windows.push({ start: lunchEnd, end: Math.min(dinnerStartMin, bedtimeMin), label: 'Session Après-midi' });
++    }
++    if (dinnerEndMin < bedtimeMin) {
++      windows.push({ start: dinnerEndMin, end: bedtimeMin, label: 'Session Soirée' });
++    }
++    return {
++      isBlankCanvas: true,
++      canvasReason: canvasStatus.reason,
++      canvasBadge: canvasStatus.badge,
++      bufferMin,
++      startMin: canvasStart,
++      dinnerStartMin,
++      dinnerEndMin,
++      bedtimeMin,
++      windows,
++      lateAcademicSlots: [],
++      lastDaytimeSlot: null,
++      lunchBreak: { startMin: lunchStart, endMin: lunchEnd }
++    };
++  }
++
++  // Cas 2 : Journée de semaine sans créneau renseigné dans l'agenda
++  if (sortedSlots.length === 0) {
++    const effectiveStart = Math.min(defaultClassEndMin, bedtimeMin);
++    const windows = [];
++    if (effectiveStart < dinnerStartMin) {
++      windows.push({ start: effectiveStart, end: Math.min(dinnerStartMin, bedtimeMin), label: 'Avant dîner' });
++    }
++    const postDinner = Math.max(effectiveStart, dinnerEndMin);
++    if (postDinner < bedtimeMin) {
++      windows.push({ start: postDinner, end: bedtimeMin, label: 'Après dîner' });
++    }
++    return {
++      isBlankCanvas: false,
++      canvasReason: null,
++      canvasBadge: null,
++      bufferMin,
++      startMin: effectiveStart,
++      dinnerStartMin,
++      dinnerEndMin,
++      bedtimeMin,
++      windows,
++      lateAcademicSlots: [],
++      lastDaytimeSlot: null,
++      lunchBreak: null
++    };
++  }
++
++  // Cas 3 : Journée avec cours -> détection dynamique des trous d'après-midi et des séances tardives (ex: Colle à 19h00)
++  // On regroupe les cours continus de la journée (pause déjeuner < 14h15 ou intercours < 2*buffer + 20m)
++  let coreDismissalSlot = sortedSlots[0];
++  let lateAcademicSlots = [];
++
++  for (let i = 1; i < sortedSlots.length; i++) {
++    const prev = coreDismissalSlot;
++    const curr = sortedSlots[i];
++    const gap = curr.start - prev.end;
++    // Un trou d'après-midi exploitable (entre la fin des cours de journée et une séance tardive type Colle)
++    // doit se produire après la pause déjeuner (prev.end >= 13:30 et curr.start >= 16:00) et offrir au moins (2 * bufferMin + 25 min)
++    // Exemple : fin des cours à 15:30, colle à 19:00 -> gap = 210 min -> fenêtre active 16:00 à 18:30 !
++    const minStudyGap = (2 * bufferMin) + 25;
++    if (prev.end >= (13 * 60 + 30) && curr.start >= (16 * 60) && gap >= minStudyGap) {
++      lateAcademicSlots = sortedSlots.slice(i);
++      break;
++    } else {
++      if (curr.end > coreDismissalSlot.end) {
++        coreDismissalSlot = curr;
++      }
++    }
++  }
++
++  // Début de l'enveloppe After-Hours = fin du bloc de cours principal + buffer trajet (ex: 15:30 + 30m = 16:00)
++  const rawAfterHoursStart = coreDismissalSlot.end + bufferMin;
++  const effectiveStartMin = Math.min(Math.max(12 * 60, rawAfterHoursStart), bedtimeMin);
++
++  // Construire les fenêtres en soustrayant de [effectiveStartMin, bedtimeMin] :
++  // 1) Chaque séance tardive entourée de son buffer [slot.start - bufferMin, slot.end + bufferMin]
++  // 2) La fenêtre de dîner [dinnerStartMin, dinnerEndMin]
++  let intervals = [{ start: effectiveStartMin, end: bedtimeMin }];
++
++  const subtractInterval = (list, cutStart, cutEnd) => {
++    if (cutEnd <= cutStart) return list;
++    const next = [];
++    list.forEach(iv => {
++      if (cutEnd <= iv.start || cutStart >= iv.end) {
++        next.push(iv);
++      } else {
++        if (cutStart > iv.start) next.push({ start: iv.start, end: cutStart });
++        if (cutEnd < iv.end) next.push({ start: cutEnd, end: iv.end });
++      }
++    });
++    return next;
++  };
++
++  lateAcademicSlots.forEach(ls => {
++    // Buffer avant la séance tardive (ex: 19:00 - 30m = 18:30)
++    // Si la séance tardive se termine pendant ou juste avant le dîner, pas de double buffer après
++    const postBuffer = (ls.end >= dinnerStartMin && ls.end <= dinnerEndMin) ? 0 : bufferMin;
++    intervals = subtractInterval(intervals, ls.start - bufferMin, ls.end + postBuffer);
+   });
+-  if (maxEnd >= 15 * 60) return maxEnd;
+-  return defaultStart;
++
++  // Soustraire la pause dîner
++  intervals = subtractInterval(intervals, dinnerStartMin, dinnerEndMin);
++
++  // Conserver les fenêtres d'au moins 15 minutes
++  const windows = intervals
++    .filter(iv => (iv.end - iv.start) >= 15)
++    .map(iv => ({
++      start: iv.start,
++      end: iv.end,
++      label: iv.end <= dinnerStartMin ? 'Fenêtre pré-dîner' : 'Fenêtre soirée'
++    }));
++
++  return {
++    isBlankCanvas: false,
++    canvasReason: null,
++    canvasBadge: null,
++    bufferMin,
++    startMin: effectiveStartMin,
++    rawClassEndMin: coreDismissalSlot.end,
++    dinnerStartMin,
++    dinnerEndMin,
++    bedtimeMin,
++    windows,
++    lateAcademicSlots,
++    lastDaytimeSlot: coreDismissalSlot.raw,
++    lunchBreak: null
++  };
++}
++
++function computeEveningStartMinForDay(dateObj, dayIdx) {
++  const env = computeAfterHoursEnvelope(dateObj, dayIdx);
++  return env.startMin;
++}
++
++// =========================================================
++// FEATURE 2 : PEDAGOGICAL DEPENDENCY ORDERING (Cours -> TD/Exos -> DM)
++// =========================================================
++
++const PEDAGO_STOPWORDS = new Set([
++  'cours', 'td', 'tp', 'dm', 'ds', 'colle', 'kholle', 'exercice', 'exercices',
++  'exo', 'exos', 'chapitre', 'chap', 'ch', 'lecon', 'theme', 'partie', 'sequence',
++  'sujet', 'feuille', 'fiche', 'serie', 'revisions', 'revision', 'preparation',
++  'apprendre', 'relire', 'faire', 'finir', 'terminer', 'corriger', 'entrainement',
++  'approfondissement', 'dans', 'pour', 'avec', 'sans', 'tout', 'tous', 'toute',
++  'toutes', 'entre', 'vers', 'chez', 'plus', 'moins', 'sur', 'aux', 'des', 'les',
++  'une', 'numero', 'maths', 'mathematiques', 'physique', 'chimie', 'sii',
++  'informatique', 'anglais', 'francais', 'philo'
++]);
++
++/**
++ * Normalise un intitulé de mission (sans accents, minuscule) et extrait :
++ * - Les jetons de chapitre explicites (ex: "Ch. 2", "Chapitre 02" -> "ch_2")
++ * - Les jetons thématiques (ex: "Thermodynamique" -> "thermodynamique")
++ */
++function extractChapterSignature(title) {
++  const norm = String(title || '')
++    .normalize('NFD')
++    .replace(/[\u0300-\u036f]/g, '')
++    .toLowerCase();
++
++  const chapterNums = [];
++  const chapRegex = /\b(?:chapitre|chap|ch|theme|lecon|partie|seq|sequence)\s*\.?\s*0*(\d+|[ivx]{1,4})\b/gi;
++  let match;
++  while ((match = chapRegex.exec(norm)) !== null) {
++    chapterNums.push('ch_' + String(match[1]).toLowerCase());
++  }
++
++  const words = norm
++    .replace(/[^a-z0-9\s]/g, ' ')
++    .split(/\s+/)
++    .filter(w => w.length >= 4 && !/^\d+$/.test(w) && !PEDAGO_STOPWORDS.has(w))
++    .map(w => w.replace(/(?:es|s|x)$/, '')); // Racinisation légère pluriel -> singulier
++
++  const topicTokens = Array.from(new Set(words.filter(w => w.length >= 4)));
++  return {
++    chapterNums: Array.from(new Set(chapterNums)),
++    topicTokens
++  };
++}
++
++/**
++ * Retourne le rang pédagogique strict :
++ * 1 = Cours (apprentissage / révision de cours)
++ * 2 = Exercice / TD / TP / Colle (entraînement & application)
++ * 3 = DM / DS (production / évaluation)
++ */
++function getPedagogicalRank(task) {
++  if (!task) return 2;
++  const rawType = String(task.type || '').trim().toLowerCase();
++  const normTitle = String(task.title || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
++
++  if (rawType === 'cours' || rawType === 'revision' || rawType === 'révision' || /^(?:cours|apprendre|relire\s+le\s+cours)\b/.test(normTitle)) {
++    return 1;
++  }
++  if (rawType === 'dm' || rawType === 'ds' || /^(?:dm|ds|devoir)\b/.test(normTitle)) {
++    return 3;
++  }
++  if (rawType === 'exercice' || rawType === 'td' || rawType === 'tp' || rawType === 'colle' || /^(?:td|tp|exo|exercice|colle|kholle)\b/.test(normTitle)) {
++    return 2;
++  }
++  return 2;
++}
++
++function getPedagogicalStageName(rank) {
++  if (rank === 1) return 'Cours';
++  if (rank === 2) return 'TD/Exos';
++  return 'DM';
++}
++
++/**
++ * Vérifie si deux missions de la même matière partagent le même chapitre/thème
++ * ou appartiennent au même flux pédagogique sans conflit de numéro de chapitre.
++ */
++function tasksSharePedagogicalContext(sigA, sigB) {
++  // Si les deux mentionnent un numéro de chapitre explicite (ex: Ch. 2 vs Ch. 3), ils doivent avoir au moins un numéro en commun
++  if (sigA.chapterNums.length > 0 && sigB.chapterNums.length > 0) {
++    return sigA.chapterNums.some(c => sigB.chapterNums.includes(c));
++  }
++  // S'ils partagent un mot-clé thématique (ex: "thermodynamique", "optique", "matrice")
++  if (sigA.topicTokens.length > 0 && sigB.topicTokens.length > 0) {
++    if (sigA.topicTokens.some(t => sigB.topicTokens.includes(t))) return true;
++  }
++  // Dans une même matière programmée le même soir, si aucun numéro de chapitre contradictoire n'est spécifié,
++  // le flux Cours -> TD/Exos -> DM s'applique naturellement.
++  return true;
+ }
+ 
+ // =========================================================
+-// ALGORITHME D'ALLOCATION SOIRÉE (KNAPSACK & PERSISTANCE)
++// ALGORITHME D'ALLOCATION AFTER-HOURS (KNAPSACK, SIESTES & PERSISTANCE)
+ // =========================================================
+ function getTaskEveningDurationHours(task) {
+   if (!task) return 1;
+   const custom = state.eveningPlan && state.eveningPlan.customDurations && state.eveningPlan.customDurations[task.id];
+   if (custom && custom >= 0.25) return Number(custom);
+ 
+-  // Si la tâche est cochée comme terminée dans le planning soirée, conserver sa durée allouée pour ne jamais faire disparaître/rétrécir son créneau
+   if (isTaskCompleted(task)) {
+     if (task.eveningAllocatedHours && task.eveningAllocatedHours >= 0.25) {
+       return Number(task.eveningAllocatedHours);
+@@ -149,19 +427,22 @@ function getTaskActivePhaseLabel(task) {
+ }
+ 
+ function getEveningSelectedDayISO() {
+-  const selDay = getAgendaDay();
++  const selDay = getAgendaDay(state.agendaSubTab === 'evening');
+   const selDate = addDays(viewedWeekStart, selDay);
+   return formatDateISO(selDate);
+ }
+ 
++function getDayNaps(dayISO) {
++  if (!state.eveningPlan || !state.eveningPlan.naps || typeof state.eveningPlan.naps !== 'object') return [];
++  const list = state.eveningPlan.naps[dayISO];
++  return Array.isArray(list) ? list : [];
++}
++
+ function getOrderedEveningCandidates(dayISO = null) {
+   const targetISO = dayISO || getEveningSelectedDayISO();
+ 
+-  // Tâches actives + tâches validées POUR CETTE SOIRÉE (depuis Missions ou Planning Soirée) :
+-  // elles gardent leur créneau, barrées, sans être remplacées. Les tâches validées les jours précédents n'encombrent plus.
+   const pool = state.tasks.filter(t => !isTaskCompleted(t) || t.completedInEveningDate === targetISO);
+ 
+-  // Pour le tri initial par tension, on trie les actives; si une tâche est déjà dans manualOrder, on respecte exactement sa place
+   const manual = (state.eveningPlan && Array.isArray(state.eveningPlan.manualOrder)) ? state.eveningPlan.manualOrder : [];
+   const rankMap = new Map();
+   manual.forEach((id, idx) => rankMap.set(id, idx));
+@@ -169,13 +450,13 @@ function getOrderedEveningCandidates(dayISO = null) {
+   const cfg = state.settings || DEFAULT_SETTINGS;
+   const tomorrowFirst = cfg.tomorrowFirst !== false;
+ 
+-  return pool.slice().sort((a, b) => {
++  // 1. Tri initial par Tension Index (et respect de l'ordre manuel si déjà fixé)
++  const tensionSorted = pool.slice().sort((a, b) => {
+     const hasA = rankMap.has(a.id);
+     const hasB = rankMap.has(b.id);
+     if (hasA && hasB) return rankMap.get(a.id) - rankMap.get(b.id);
+     if (hasA !== hasB) return hasA ? -1 : 1;
+ 
+-    // Sinon tri par Tension décroissante (sans reléguer en bas celles cochées dans la soirée)
+     const pa = computePressure(Object.assign({}, a, { completed: false, status: 'todo' }));
+     const pb = computePressure(Object.assign({}, b, { completed: false, status: 'todo' }));
+ 
+@@ -187,36 +468,97 @@ function getOrderedEveningCandidates(dayISO = null) {
+     if (pb.score !== pa.score) return pb.score - pa.score;
+     return pa.diffDays - pb.diffDays;
+   });
++
++  // 2. Feature 2 : Ordonnancement pédagogique (Cours -> Exercice/TD -> DM)
++  // Pour les tâches non figées manuellement, regrouper les tâches de même matière et chapitre/thème
++  // afin d'imposer l'ordre prérequis Cours (1) -> Exercice/TD (2) -> DM (3)
++  const sigCache = new Map();
++  const getSig = (t) => {
++    if (!sigCache.has(t.id)) sigCache.set(t.id, extractChapterSignature(t.title));
++    return sigCache.get(t.id);
++  };
++
++  tensionSorted.forEach(t => { delete t._pedagoChainLabel; });
++
++  const result = [];
++  const consumedIds = new Set();
++
++  for (let i = 0; i < tensionSorted.length; i++) {
++    const anchor = tensionSorted[i];
++    if (consumedIds.has(anchor.id)) continue;
++
++    // Si la tâche a été placée manuellement par l'utilisateur, respecter sa position exacte
++    if (rankMap.has(anchor.id)) {
++      consumedIds.add(anchor.id);
++      result.push(anchor);
++      continue;
++    }
++
++    const anchorSig = getSig(anchor);
++    const cluster = [anchor];
++    consumedIds.add(anchor.id);
++
++    for (let j = i + 1; j < tensionSorted.length; j++) {
++      const cand = tensionSorted[j];
++      if (consumedIds.has(cand.id) || rankMap.has(cand.id)) continue;
++      if (cand.subject !== anchor.subject) continue;
++      const candSig = getSig(cand);
++      if (tasksSharePedagogicalContext(anchorSig, candSig)) {
++        cluster.push(cand);
++        consumedIds.add(cand.id);
++      }
++    }
++
++    if (cluster.length > 1) {
++      // Vérifier s'il y a plusieurs niveaux pédagogiques distincts (ex: Cours + TD ou TD + DM)
++      const distinctStages = new Set(cluster.map(t => getPedagogicalRank(t)));
++      cluster.sort((a, b) => {
++        const ra = getPedagogicalRank(a);
++        const rb = getPedagogicalRank(b);
++        if (ra !== rb) return ra - rb;
++        const pa = computePressure(Object.assign({}, a, { completed: false, status: 'todo' }));
++        const pb = computePressure(Object.assign({}, b, { completed: false, status: 'todo' }));
++        return pb.score - pa.score;
++      });
++      if (distinctStages.size > 1) {
++        const chainLabel = Array.from(distinctStages)
++          .sort((a, b) => a - b)
++          .map(r => getPedagogicalStageName(r))
++          .join(' → ');
++        cluster.forEach((t, idx) => {
++          t._pedagoChainLabel = `Flux ${idx + 1}/${cluster.length} · ${chainLabel}`;
++        });
++      }
++    }
++
++    result.push(...cluster);
++  }
++
++  return result;
+ }
+ 
+ function buildEveningScheduleModel(dateObj, dayIdx) {
+   const dayISO = formatDateISO(dateObj);
+   const cfg = state.settings || DEFAULT_SETTINGS;
+-  const startMin = computeEveningStartMinForDay(dateObj, dayIdx);
+-  const dinnerStartMin = timeToMin(cfg.dinnerStart || '19:00');
+-  const dinnerEndMin = Math.max(dinnerStartMin + 15, timeToMin(cfg.dinnerEnd || '20:00'));
+-  const bedtimeMin = Math.max(dinnerEndMin + 30, timeToMin(cfg.bedtime || '23:00'));
++  const env = computeAfterHoursEnvelope(dateObj, dayIdx);
+ 
+-  const effectiveStartMin = Math.min(startMin, bedtimeMin);
++  const effectiveStartMin = env.startMin;
++  const dinnerStartMin = env.dinnerStartMin;
++  const dinnerEndMin = env.dinnerEndMin;
++  const bedtimeMin = env.bedtimeMin;
++  const windows = env.windows;
+ 
+-  // Créneaux d'étude disponibles autour du bloc dîner intouchable
+-  const windows = [];
+-  if (effectiveStartMin < dinnerStartMin) {
+-    windows.push({ start: effectiveStartMin, end: Math.min(dinnerStartMin, bedtimeMin), label: 'Avant dîner' });
+-  }
+-  const postDinnerStart = Math.max(effectiveStartMin, dinnerEndMin);
+-  if (postDinnerStart < bedtimeMin) {
+-    windows.push({ start: postDinnerStart, end: bedtimeMin, label: 'Après dîner' });
+-  }
+-
+-  const totalStudyCapacityMin = windows.reduce((acc, w) => acc + Math.max(0, w.end - w.start), 0);
++  const baseStudyCapacityMin = windows.reduce((acc, w) => acc + Math.max(0, w.end - w.start), 0);
+   const excludedSet = new Set((state.eveningPlan && state.eveningPlan.excludedIds) || []);
+   const orderedCandidates = getOrderedEveningCandidates(dayISO);
++  const dayNaps = getDayNaps(dayISO);
++  const totalNapMin = dayNaps.reduce((acc, n) => acc + (parseInt(n.durationMin, 10) || 20), 0);
+ 
+-  const winCursors = windows.map(w => ({ start: w.start, cursor: w.start, end: w.end, label: w.label }));
+-  const scheduledBlocks = [];
+-  const allocatedTaskIds = new Set();
++  // Étape 1 : Sélectionner les missions qui rentrent dans l'enveloppe d'étude (AVANT l'impact des siestes,
++  // afin qu'insérer une sieste décale dynamiquement les blocs suivants SANS JAMAIS supprimer de mission !)
++  const selectedTasks = [];
+   const overflowTasks = [];
++  const allocatedTaskIds = new Set();
+   let usedStudyMin = 0;
+   let bedtimeOverflowMin = 0;
+ 
+@@ -230,10 +572,9 @@ function buildEveningScheduleModel(dateObj, dayIdx) {
+ 
+     const durHours = getTaskEveningDurationHours(task);
+     const neededMin = Math.max(15, Math.round(durHours * 60));
+-    const remainingCap = winCursors.reduce((acc, w) => acc + Math.max(0, w.end - w.cursor), 0);
++    const remainingBaseCap = Math.max(0, baseStudyCapacityMin - usedStudyMin);
+ 
+-    // Knapsack : si la tâche dépasse la capacité disponible avant le couvre-feu, elle bascule dans À reporter
+-    if (neededMin > remainingCap) {
++    if (neededMin > remainingBaseCap) {
+       if (!isTaskCompleted(task)) {
+         overflowTasks.push({ task, reason: 'Dépasse le couvre-feu (' + (cfg.bedtime || '23:00') + ')', neededMin, isManualDefer: false });
+         bedtimeOverflowMin += neededMin;
+@@ -241,6 +582,82 @@ function buildEveningScheduleModel(dateObj, dayIdx) {
+       return;
+     }
+ 
++    selectedTasks.push({ task, neededMin });
++    allocatedTaskIds.add(task.id);
++    usedStudyMin += neededMin;
++  });
++
++  // Étape 2 : Ordonner la séquence unifiée [Siestes + Missions sélectionnées] selon manualOrder
++  // Par défaut, une nouvelle sieste se place en tête ou à la position choisie par glisser-déposer,
++  // ce qui décale dynamiquement toutes les missions situées après elle.
++  const manual = (state.eveningPlan && Array.isArray(state.eveningPlan.manualOrder)) ? state.eveningPlan.manualOrder : [];
++  const timelineSequence = [];
++  const napMap = new Map(dayNaps.map(n => [n.id, n]));
++  const taskMap = new Map(selectedTasks.map(item => [item.task.id, item]));
++  const placedIds = new Set();
++
++  manual.forEach(id => {
++    if (napMap.has(id) && !placedIds.has(id)) {
++      timelineSequence.push({ itemType: 'nap', nap: napMap.get(id) });
++      placedIds.add(id);
++    } else if (taskMap.has(id) && !placedIds.has(id)) {
++      timelineSequence.push({ itemType: 'task', taskItem: taskMap.get(id) });
++      placedIds.add(id);
++    }
++  });
++
++  // Les siestes non encore présentes dans manualOrder sont insérées au début de la fenêtre active
++  dayNaps.forEach(n => {
++    if (!placedIds.has(n.id)) {
++      timelineSequence.unshift({ itemType: 'nap', nap: n });
++      placedIds.add(n.id);
++    }
++  });
++
++  selectedTasks.forEach(item => {
++    if (!placedIds.has(item.task.id)) {
++      timelineSequence.push({ itemType: 'task', taskItem: item });
++      placedIds.add(item.task.id);
++    }
++  });
++
++  // Étape 3 : Allouer les créneaux horaires dans les fenêtres actives
++  // Si les siestes poussent la dernière tâche au-delà de bedtimeMin, on étend la dernière fenêtre de totalNapMin
++  // pour que les tâches soient décalées (shifted) sans jamais être supprimées.
++  const winCursors = windows.map((w, idx) => ({
++    start: w.start,
++    cursor: w.start,
++    end: (idx === windows.length - 1) ? (w.end + totalNapMin) : w.end,
++    baseEnd: w.end,
++    label: w.label
++  }));
++
++  const scheduledBlocks = [];
++
++  timelineSequence.forEach(entry => {
++    if (entry.itemType === 'nap') {
++      const nap = entry.nap;
++      const napDur = Math.max(10, parseInt(nap.durationMin, 10) || 20);
++      let left = napDur;
++      for (let i = 0; i < winCursors.length && left > 0; i++) {
++        const w = winCursors[i];
++        const avail = w.end - w.cursor;
++        if (avail <= 0) continue;
++        const chunk = Math.min(avail, left);
++        scheduledBlocks.push({
++          kind: 'nap',
++          nap,
++          startMin: w.cursor,
++          endMin: w.cursor + chunk,
++          durationMin: chunk
++        });
++        w.cursor += chunk;
++        left -= chunk;
++      }
++      return;
++    }
++
++    const { task, neededMin } = entry.taskItem;
+     let leftToAllocate = neededMin;
+     let partIndex = 1;
+     const tempSegments = [];
+@@ -269,27 +686,51 @@ function buildEveningScheduleModel(dateObj, dayIdx) {
+         endMin: seg.end,
+         durationMin: seg.durationMin,
+         partIndex: totalParts > 1 ? partIndex++ : null,
+-        totalParts: totalParts > 1 ? totalParts : null
++        totalParts: totalParts > 1 ? totalParts : null,
++        shiftedPastBedtime: seg.end > bedtimeMin
+       });
+     });
+-
+-    allocatedTaskIds.add(task.id);
+-    usedStudyMin += neededMin;
+   });
+ 
+   const timelineEvents = [...scheduledBlocks];
+ 
++  // Ajouter les créneaux libres restants dans la limite du couvre-feu de base
+   winCursors.forEach(w => {
+-    if (w.end - w.cursor >= 15) {
++    const freeEnd = Math.min(w.baseEnd, w.end);
++    if (freeEnd - w.cursor >= 15) {
+       timelineEvents.push({
+         kind: 'free',
+         startMin: w.cursor,
+-        endMin: w.end,
+-        durationMin: w.end - w.cursor
++        endMin: freeEnd,
++        durationMin: freeEnd - w.cursor
+       });
+     }
+   });
+ 
++  // Ajouter les séances académiques tardives (ex: Colle 19:00-20:00) pour visualiser pourquoi la fenêtre pré-colle s'est arrêtée à 18:30
++  if (Array.isArray(env.lateAcademicSlots)) {
++    env.lateAcademicSlots.forEach(ls => {
++      timelineEvents.push({
++        kind: 'academic_late',
++        slot: ls,
++        startMin: ls.start,
++        endMin: ls.end,
++        durationMin: ls.end - ls.start,
++        bufferMin: env.bufferMin
++      });
++    });
++  }
++
++  // Ajouter la pause déjeuner en mode Blank Canvas (Week-end / Férié)
++  if (env.lunchBreak) {
++    timelineEvents.push({
++      kind: 'lunch',
++      startMin: env.lunchBreak.startMin,
++      endMin: env.lunchBreak.endMin,
++      durationMin: env.lunchBreak.endMin - env.lunchBreak.startMin
++    });
++  }
++
+   if (dinnerStartMin < bedtimeMin && dinnerEndMin > effectiveStartMin) {
+     timelineEvents.push({
+       kind: 'dinner',
+@@ -305,12 +746,14 @@ function buildEveningScheduleModel(dateObj, dayIdx) {
+ 
+   return {
+     dayISO,
++    envelope: env,
+     startMin: effectiveStartMin,
+     dinnerStartMin,
+     dinnerEndMin,
+     bedtimeMin,
+-    totalStudyCapacityMin,
++    totalStudyCapacityMin: baseStudyCapacityMin,
+     usedStudyMin,
++    totalNapMin,
+     bedtimeOverflowMin,
+     cumulativeDemandMin,
+     timelineEvents,
+@@ -327,11 +770,77 @@ function formatDurationHM(totalMinutes) {
+ }
+ 
+ function ensureEveningManualOrderInitialized(dayISO = null) {
+-  if (!state.eveningPlan) state.eveningPlan = { manualOrder: [], excludedIds: [], customDurations: {}, pinnedEveningIds: [] };
+-  const candidates = getOrderedEveningCandidates(dayISO).map(t => t.id);
+-  state.eveningPlan.manualOrder = candidates;
++  const targetISO = dayISO || getEveningSelectedDayISO();
++  if (!state.eveningPlan) state.eveningPlan = { manualOrder: [], excludedIds: [], customDurations: {}, pinnedEveningIds: [], naps: {} };
++  const existingNaps = getDayNaps(targetISO).map(n => n.id);
++  const candidates = getOrderedEveningCandidates(targetISO).map(t => t.id);
++  // Conserver les positions existantes des siestes dans manualOrder
++  const currentManual = Array.isArray(state.eveningPlan.manualOrder) ? state.eveningPlan.manualOrder : [];
++  const merged = [];
++  currentManual.forEach(id => {
++    if ((existingNaps.includes(id) || candidates.includes(id)) && !merged.includes(id)) {
++      merged.push(id);
++    }
++  });
++  existingNaps.forEach(id => {
++    if (!merged.includes(id)) merged.unshift(id);
++  });
++  candidates.forEach(id => {
++    if (!merged.includes(id)) merged.push(id);
++  });
++  state.eveningPlan.manualOrder = merged;
+ }
+ 
++/**
++ * Feature 1.3 : Power Nap / Pause Trigger (+ Poser une sieste : 20m, 30m, 45m)
++ * Insère une sieste dans l'After-Hours Engine et décale dynamiquement les blocs de tâches suivants sans les supprimer.
++ */
++window.addEveningNap = function(durationMin = 20, event = null) {
++  if (event) event.stopPropagation();
++  const dur = [20, 30, 45].includes(Number(durationMin)) ? Number(durationMin) : 20;
++  const dayISO = getEveningSelectedDayISO();
++  ensureEveningManualOrderInitialized(dayISO);
++  if (!state.eveningPlan.naps || typeof state.eveningPlan.naps !== 'object') {
++    state.eveningPlan.naps = {};
++  }
++  if (!Array.isArray(state.eveningPlan.naps[dayISO])) {
++    state.eveningPlan.naps[dayISO] = [];
++  }
++  const napId = 'nap_' + uid();
++  state.eveningPlan.naps[dayISO].push({
++    id: napId,
++    durationMin: dur,
++    label: `Power Nap (${dur}m)`
++  });
++  // Insérer la sieste au début des tâches non terminées (ou en tête de soirée) pour décaler les blocs suivants
++  const firstActiveTaskIdx = state.eveningPlan.manualOrder.findIndex(id => {
++    const t = state.tasks.find(x => x.id === id);
++    return t && !isTaskCompleted(t);
++  });
++  if (firstActiveTaskIdx !== -1) {
++    state.eveningPlan.manualOrder.splice(firstActiveTaskIdx, 0, napId);
++  } else {
++    state.eveningPlan.manualOrder.unshift(napId);
++  }
++  saveState();
++  renderAgenda();
++  showToast(`Sieste de ${dur} min posée — créneaux suivants décalés (+${dur}m)`);
++};
++
++window.removeEveningNap = function(napId, dayISO = null, event = null) {
++  if (event) event.stopPropagation();
++  const targetISO = dayISO || getEveningSelectedDayISO();
++  if (state.eveningPlan && state.eveningPlan.naps && Array.isArray(state.eveningPlan.naps[targetISO])) {
++    state.eveningPlan.naps[targetISO] = state.eveningPlan.naps[targetISO].filter(n => n.id !== napId);
++  }
++  if (state.eveningPlan && Array.isArray(state.eveningPlan.manualOrder)) {
++    state.eveningPlan.manualOrder = state.eveningPlan.manualOrder.filter(id => id !== napId);
++  }
++  saveState();
++  renderAgenda();
++  showToast('Sieste retirée — planning réajusté');
++};
++
+ window.moveEveningTaskOrder = function(taskId, delta, event) {
+   if (event) event.stopPropagation();
+   ensureEveningManualOrderInitialized();
+@@ -354,7 +863,7 @@ window.prioritizeTaskTonight = function(taskId, event) {
+   state.eveningPlan.manualOrder = [taskId, ...state.eveningPlan.manualOrder.filter(id => id !== taskId)];
+   saveState();
+   renderAgenda();
+-  showToast('Mission placée en tête de soirée');
++  showToast('Mission placée en tête de l\'After-Hours Engine');
+ };
+ 
+ window.deferTaskToOverflow = function(taskId, event) {
+@@ -372,7 +881,7 @@ window.adjustEveningTaskDuration = function(taskId, deltaHours, event) {
+   if (event) event.stopPropagation();
+   const task = state.tasks.find(t => t.id === taskId);
+   if (!task) return;
+-  if (!state.eveningPlan) state.eveningPlan = { manualOrder: [], excludedIds: [], customDurations: {}, pinnedEveningIds: [] };
++  if (!state.eveningPlan) state.eveningPlan = { manualOrder: [], excludedIds: [], customDurations: {}, pinnedEveningIds: [], naps: {} };
+   if (!state.eveningPlan.customDurations) state.eveningPlan.customDurations = {};
+   const current = getTaskEveningDurationHours(task);
+   const next = Math.max(0.25, Math.min(6, Number((current + deltaHours).toFixed(2))));
+@@ -383,26 +892,32 @@ window.adjustEveningTaskDuration = function(taskId, deltaHours, event) {
+ };
+ 
+ window.resetEveningAllocation = function() {
+-  state.eveningPlan = { manualOrder: [], excludedIds: [], customDurations: {}, pinnedEveningIds: [] };
++  const existingNaps = (state.eveningPlan && state.eveningPlan.naps) ? state.eveningPlan.naps : {};
++  state.eveningPlan = { manualOrder: [], excludedIds: [], customDurations: {}, pinnedEveningIds: [], naps: existingNaps };
+   state.tasks.forEach(t => {
+     delete t.completedInEveningDate;
+     delete t.eveningAllocatedHours;
+   });
+   saveState();
+   renderAgenda();
+-  showToast('Allocation soirée recalculée par tension');
++  showToast('After-Hours Engine recalculé (Tension + Flux Cours → TD → DM)');
+ };
+ 
+ window.updateEveningRhythmQuick = function(field, value) {
+-  if (!value) return;
++  if (value === undefined || value === null || value === '') return;
+   if (!state.settings) state.settings = JSON.parse(JSON.stringify(DEFAULT_SETTINGS));
+-  state.settings[field] = value;
++  if (field === 'commuteBufferMin') {
++    const num = parseInt(value, 10);
++    state.settings.commuteBufferMin = Number.isFinite(num) ? Math.min(120, Math.max(0, num)) : 30;
++  } else {
++    state.settings[field] = value;
++  }
+   saveState();
+   renderAgenda();
+   if (typeof window.renderSettingsPanel === 'function') window.renderSettingsPanel();
+ };
+ 
+-// Validation persistante dans le Planning Soirée : la tâche NE disparaît PAS de son créneau
++// Validation persistante dans l'After-Hours Engine : la tâche NE disparaît PAS de son créneau
+ window.toggleTaskFromEvening = function(taskId, dayISO, event) {
+   if (event) {
+     event.stopPropagation();
+@@ -412,7 +927,6 @@ window.toggleTaskFromEvening = function(taskId, dayISO, event) {
+   if (!t) return;
+ 
+   const targetISO = dayISO || getEveningSelectedDayISO();
+-  // Figer l'ordre actuel et la durée allouée de la tâche pour qu'elle reste exactement dans son bloc horaire
+   ensureEveningManualOrderInitialized(targetISO);
+   if (!state.eveningPlan.pinnedEveningIds) state.eveningPlan.pinnedEveningIds = [];
+   if (!state.eveningPlan.pinnedEveningIds.includes(taskId)) {
+@@ -426,20 +940,20 @@ window.toggleTaskFromEvening = function(taskId, dayISO, event) {
+     showToast('Mission validée (conservée dans la timeline)');
+   } else {
+     setTaskCompletedState(t, false, null);
+-    t.completedInEveningDate = targetISO; // Garde sa place dans la soirée courante
++    t.completedInEveningDate = targetISO;
+     showToast('Mission remise en cours');
+   }
+   saveState();
+   renderAgenda();
+ };
+ 
+-// Drag & Drop handlers for Evening Planner
+-window.onEveningDragStart = function(e, taskId) {
+-  draggedEveningTaskId = taskId;
++// Drag & Drop handlers for After-Hours Engine (supporte les tâches et les siestes)
++window.onEveningDragStart = function(e, itemId) {
++  draggedEveningTaskId = itemId;
+   e.currentTarget.classList.add('dragging');
+   if (e.dataTransfer) {
+     e.dataTransfer.effectAllowed = 'move';
+-    e.dataTransfer.setData('text/plain', taskId);
++    e.dataTransfer.setData('text/plain', itemId);
+   }
+ };
+ 
+@@ -457,24 +971,24 @@ window.onEveningDragLeave = function(e) {
+   e.currentTarget.classList.remove('drag-over');
+ };
+ 
+-window.onEveningDropOnTask = function(e, targetTaskId) {
++window.onEveningDropOnTask = function(e, targetItemId) {
+   e.preventDefault();
+   e.stopPropagation();
+   e.currentTarget.classList.remove('drag-over');
+   const srcId = draggedEveningTaskId;
+   draggedEveningTaskId = null;
+-  if (!srcId || srcId === targetTaskId) return;
++  if (!srcId || srcId === targetItemId) return;
+ 
+   ensureEveningManualOrderInitialized();
+   state.eveningPlan.excludedIds = (state.eveningPlan.excludedIds || []).filter(id => id !== srcId);
+   const arr = state.eveningPlan.manualOrder.filter(id => id !== srcId);
+-  const targetIdx = arr.indexOf(targetTaskId);
++  const targetIdx = arr.indexOf(targetItemId);
+   if (targetIdx === -1) arr.unshift(srcId);
+   else arr.splice(targetIdx, 0, srcId);
+   state.eveningPlan.manualOrder = arr;
+   saveState();
+   renderAgenda();
+-  showToast('Ordre de la soirée mis à jour');
++  showToast('Ordre After-Hours mis à jour');
+ };
+ 
+ window.onEveningDropToTimeline = function(e) {
+@@ -483,6 +997,7 @@ window.onEveningDropToTimeline = function(e) {
+   if (!draggedEveningTaskId) return;
+   const srcId = draggedEveningTaskId;
+   draggedEveningTaskId = null;
++  if (String(srcId).startsWith('nap_')) return;
+   window.prioritizeTaskTonight(srcId);
+ };
+ 
+@@ -492,6 +1007,10 @@ window.onEveningDropToOverflow = function(e) {
+   if (!draggedEveningTaskId) return;
+   const srcId = draggedEveningTaskId;
+   draggedEveningTaskId = null;
++  if (String(srcId).startsWith('nap_')) {
++    window.removeEveningNap(srcId);
++    return;
++  }
+   window.deferTaskToOverflow(srcId);
+ };
+ 
+@@ -523,29 +1042,33 @@ function renderAgenda() {
+     }
+   });
+ 
+-  const weekDates = [0, 1, 2, 3, 4, 5].map(i => addDays(viewedWeekStart, i));
++  const weekDates6 = [0, 1, 2, 3, 4, 5].map(i => addDays(viewedWeekStart, i));
++  const weekDates7 = [0, 1, 2, 3, 4, 5, 6].map(i => addDays(viewedWeekStart, i));
+   const labelEl = document.getElementById('agenda-week-label');
+-  if (labelEl) labelEl.textContent = `Semaine du ${formatShortDate(weekDates[0])} au ${formatShortDate(weekDates[5])}`;
++  if (labelEl) {
++    const endIdx = subTab === 'evening' ? 6 : 5;
++    labelEl.textContent = `Semaine du ${formatShortDate(weekDates7[0])} au ${formatShortDate(weekDates7[endIdx])}`;
++  }
+ 
+   if (subTab === 'evening') {
+-    renderEveningPlanner(weekDates);
++    renderEveningPlanner(weekDates7);
+   } else {
+-    renderAcademicGrid(weekDates);
++    renderAcademicGrid(weekDates6);
+   }
+ }
+ 
+ function renderEveningPlanner(weekDates) {
+   const box = document.getElementById('calendar-grid-box');
+-  const selDay = getAgendaDay();
+-  const selDate = weekDates[selDay];
++  const selDay = getAgendaDay(true);
++  const selDate = weekDates[selDay] || weekDates[0];
+   const dayISO = formatDateISO(selDate);
+   const todayStr = formatDateISO(new Date());
+   const isToday = dayISO === todayStr;
+ 
+   const cfg = state.settings || DEFAULT_SETTINGS;
+   const model = buildEveningScheduleModel(selDate, selDay);
+-  const daySlots = getDayScheduleSlots(selDate, selDay);
+-  const lastSlot = daySlots.slice().sort((a, b) => timeToMin(b.end) - timeToMin(a.end))[0];
++  const env = model.envelope;
++  const dayLabels = typeof AFTER_HOURS_DAYS_LABELS !== 'undefined' ? AFTER_HOURS_DAYS_LABELS : ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi', 'Dimanche'];
+ 
+   const dayTabsHtml = `
+     <div class="evening-day-tabs">
+@@ -553,12 +1076,15 @@ function renderEveningPlanner(weekDates) {
+         const dIso = formatDateISO(d);
+         const active = i === selDay;
+         const td = dIso === todayStr;
++        const hol = typeof getFrenchBankHolidayName === 'function' ? getFrenchBankHolidayName(d) : null;
++        const lbl = dayLabels[i] || 'Jour';
+         return `
+-          <button type="button" onclick="window.setAgendaDay(${i})" class="btn-ghost evening-day-btn ${active ? 'active-pill' : ''}">
++          <button type="button" onclick="window.setAgendaDay(${i})" class="btn-ghost evening-day-btn ${active ? 'active-pill' : ''}" title="${hol ? escapeHtml(hol) : lbl}">
+             <span class="evening-day-name">
+-              <span class="day-lbl-full">${DAYS_LABELS[i]}</span>
+-              <span class="day-lbl-short">${DAYS_LABELS[i].slice(0, 3)}</span>
++              <span class="day-lbl-full">${lbl}</span>
++              <span class="day-lbl-short">${lbl.slice(0, 3)}</span>
+               ${td ? `<span class="evening-today-dot"></span>` : ''}
++              ${hol ? `<span style="font-size:9px; color:#34D399; font-weight:800;">★</span>` : ''}
+             </span>
+             <span class="evening-day-date mono">${formatShortDate(d)}</span>
+           </button>
+@@ -567,12 +1093,28 @@ function renderEveningPlanner(weekDates) {
+     </div>
+   `;
+ 
++  // Résumé intelligent de l'ouverture de fenêtre (ex: Fin des cours 15:30 + 30m buffer -> 16:00 | Colle à 19:00 -> fenêtre 16:00-18:30)
++  const startContextHtml = env.isBlankCanvas
++    ? `<span style="color:#34D399; font-weight:700;"><i class="ph-bold ph-sun-horizon"></i> ${escapeHtml(env.canvasBadge)}</span> <small class="hide-mobile" style="color:var(--text-subtle);">(${escapeHtml(env.canvasReason)} · 09:00 → ${minToTime(model.bedtimeMin)})</small>`
++    : `<span><span class="rhythm-lbl">Ouverture :</span> <strong class="mono">${minToTime(model.startMin)}</strong>${env.lastDaytimeSlot ? ` <small class="hide-mobile" style="color:var(--text-subtle);">(Fin ${minToTime(env.rawClassEndMin)} + ${env.bufferMin}m trajet)</small>` : ''}</span>`;
++
++  const windowsSummaryBadges = env.windows.map(w =>
++    `<span class="mono" style="font-size:10.5px; padding:2px 7px; border-radius:6px; background:rgba(56,189,248,0.12); border:1px solid rgba(56,189,248,0.3); color:#38BDF8;">${minToTime(w.start)} → ${minToTime(w.end)}</span>`
++  ).join(' ');
++
+   const rhythmBarHtml = `
+     <div class="evening-rhythm-bar">
+       <div class="evening-rhythm-pills">
+         <div class="evening-stat-pill">
+-          <i class="ph-bold ph-graduation-cap" style="color:#38BDF8;"></i>
+-          <span><span class="rhythm-lbl">Fin des cours :</span> <strong class="mono">${minToTime(model.startMin)}</strong>${lastSlot ? ` <small class="hide-mobile" style="color:var(--text-subtle);">(${escapeHtml(lastSlot.title)})</small>` : ''}</span>
++          <i class="ph-bold ph-lightning" style="color:#38BDF8;"></i>
++          ${startContextHtml}
++        </div>
++        <div class="evening-stat-pill" title="Buffer de trajet / transition après les cours et avant une colle tardive">
++          <i class="ph-bold ph-person-simple-walk" style="color:#34D399;"></i>
++          <span class="rhythm-lbl">Buffer :</span>
++          <select onchange="window.updateEveningRhythmQuick('commuteBufferMin', this.value)" class="evening-time-mini mono" style="cursor:pointer;">
++            ${[0, 15, 20, 30, 45, 60].map(v => `<option value="${v}" ${Number(env.bufferMin) === v ? 'selected' : ''}>${v}m</option>`).join('')}
++          </select>
+         </div>
+         <div class="evening-stat-pill">
+           <i class="ph-bold ph-fork-knife" style="color:#F59E0B;"></i>
+@@ -583,19 +1125,115 @@ function renderEveningPlanner(weekDates) {
+         </div>
+         <div class="evening-stat-pill">
+           <i class="ph-bold ph-moon-stars" style="color:#A855F7;"></i>
+-          <span class="rhythm-lbl">Couvre-feu :</span>
++          <span class="rhythm-lbl">Coucher :</span>
+           <input type="time" value="${escapeHtml(cfg.bedtime || '23:00')}" onchange="window.updateEveningRhythmQuick('bedtime', this.value)" class="evening-time-mini mono" title="Heure de coucher stricte" />
+         </div>
+       </div>
+-      <div class="evening-rhythm-actions">
+-        <button type="button" onclick="window.resetEveningAllocation()" class="btn-ghost evening-regen-btn" title="Recalculer un nouveau programme du soir selon les tâches restantes">
+-          <i class="ph-bold ph-arrows-clockwise"></i> <span>Régénérer le programme</span>
++      <div class="evening-rhythm-actions" style="display:flex; align-items:center; gap:6px; flex-wrap:wrap;">
++        <div class="nap-trigger-group" style="display:inline-flex; align-items:center; gap:4px; background:rgba(16,185,129,0.08); border:1px solid rgba(16,185,129,0.28); padding:3px 7px; border-radius:9px;">
++          <span style="font-size:11px; font-weight:700; color:#34D399; padding:0 4px;"><i class="ph-bold ph-battery-charging"></i> + Poser une sieste :</span>
++          <button type="button" onclick="window.addEveningNap(20, event)" class="btn-ghost evening-ctrl-btn mono" style="padding:3px 7px; font-size:11px; color:#34D399; border-color:rgba(16,185,129,0.3);">20m</button>
++          <button type="button" onclick="window.addEveningNap(30, event)" class="btn-ghost evening-ctrl-btn mono" style="padding:3px 7px; font-size:11px; color:#34D399; border-color:rgba(16,185,129,0.3);">30m</button>
++          <button type="button" onclick="window.addEveningNap(45, event)" class="btn-ghost evening-ctrl-btn mono" style="padding:3px 7px; font-size:11px; color:#34D399; border-color:rgba(16,185,129,0.3);">45m</button>
++        </div>
++        <button type="button" onclick="window.resetEveningAllocation()" class="btn-ghost evening-regen-btn" title="Recalculer l'After-Hours Engine (Tension + Flux Cours → TD → DM)">
++          <i class="ph-bold ph-arrows-clockwise"></i> <span>Optimiser</span>
+         </button>
+       </div>
+     </div>
+   `;
+ 
+   const timelineHtml = model.timelineEvents.map(ev => {
++    if (ev.kind === 'lunch') {
++      return `
++        <div class="evening-slot-card evening-slot-dinner" style="border-left:3px solid #38BDF8;">
++          <div class="evening-slot-time mono">
++            <span>${minToTime(ev.startMin)}</span>
++            <span class="evening-time-sep">↓</span>
++            <span>${minToTime(ev.endMin)}</span>
++            <span class="evening-dur-chip">${ev.durationMin}m</span>
++          </div>
++          <div class="evening-slot-body">
++            <div style="display:flex; align-items:center; justify-content:space-between; gap:8px; flex-wrap:wrap;">
++              <div style="display:flex; align-items:center; gap:9px;">
++                <span class="evening-dinner-ico" style="color:#38BDF8; background:rgba(56,189,248,0.14);"><i class="ph-fill ph-coffee"></i></span>
++                <div>
++                  <div style="font-weight:700; font-size:13px; color:#BAE6FD;">Pause Déjeuner &amp; Coupure Méridienne</div>
++                  <div class="hide-mobile" style="font-size:11.5px; color:var(--text-muted);">Coupure recommandée sur journée Blank Canvas · ${ev.durationMin} min</div>
++                </div>
++              </div>
++              <span class="mono" style="font-size:10px; padding:2px 8px; border-radius:99px; background:rgba(56,189,248,0.14); border:1px solid rgba(56,189,248,0.35); color:#38BDF8;">PAUSE MIDI</span>
++            </div>
++          </div>
++        </div>
++      `;
++    }
++
++    if (ev.kind === 'academic_late') {
++      const ls = ev.slot;
++      return `
++        <div class="evening-slot-card evening-slot-dinner" style="border-left:3px solid #F43F5E; background:rgba(244,63,94,0.06);">
++          <div class="evening-slot-time mono">
++            <span style="color:#FDA4AF; font-weight:700;">${minToTime(ev.startMin)}</span>
++            <span class="evening-time-sep">↓</span>
++            <span>${minToTime(ev.endMin)}</span>
++            <span class="evening-dur-chip">${ev.durationMin}m</span>
++          </div>
++          <div class="evening-slot-body">
++            <div style="display:flex; align-items:center; justify-content:space-between; gap:8px; flex-wrap:wrap;">
++              <div style="display:flex; align-items:center; gap:9px;">
++                <span class="evening-dinner-ico" style="color:#FB7185; background:rgba(244,63,94,0.16);"><i class="ph-fill ph-chalkboard-teacher"></i></span>
++                <div>
++                  <div style="font-weight:700; font-size:13px; color:#FECDD3;">Séance Académique Tardive : ${escapeHtml(ls.title)}</div>
++                  <div style="font-size:11.5px; color:rgba(254,205,211,0.75);">Buffer de transition (${ev.bufferMin}m) appliqué dès ${minToTime(ev.startMin - ev.bufferMin)}</div>
++                </div>
++              </div>
++              <span class="mono" style="font-size:10px; padding:2px 8px; border-radius:99px; background:rgba(244,63,94,0.16); border:1px solid rgba(244,63,94,0.38); color:#FDA4AF;">EMPLOI DU TEMPS</span>
++            </div>
++          </div>
++        </div>
++      `;
++    }
++
++    if (ev.kind === 'nap') {
++      const nap = ev.nap;
++      return `
++        <div class="evening-slot-card evening-slot-nap evening-drop-target"
++             draggable="true"
++             ondragstart="window.onEveningDragStart(event, '${nap.id}')"
++             ondragend="window.onEveningDragEnd(event)"
++             ondragover="window.onEveningDragOver(event)"
++             ondragleave="window.onEveningDragLeave(event)"
++             ondrop="window.onEveningDropOnTask(event, '${nap.id}')"
++             style="border-left: 3px solid #10B981; background: rgba(16, 185, 129, 0.07);">
++          <div class="evening-slot-time mono">
++            <span style="color:#34D399; font-weight:700;">${minToTime(ev.startMin)}</span>
++            <span class="evening-time-sep">↓</span>
++            <span>${minToTime(ev.endMin)}</span>
++            <span class="evening-dur-chip" style="color:#34D399;">${ev.durationMin}m</span>
++          </div>
++          <div class="evening-slot-body">
++            <div style="display:flex; align-items:center; justify-content:space-between; gap:8px; flex-wrap:wrap;">
++              <div style="display:flex; align-items:center; gap:9px; min-width:0;">
++                <span class="k-handle evening-drag-handle" title="Glisser pour déplacer la sieste">⠿</span>
++                <span class="evening-dinner-ico" style="color:#34D399; background:rgba(16,185,129,0.16);"><i class="ph-fill ph-battery-charging"></i></span>
++                <div style="min-width:0;">
++                  <div style="font-weight:700; font-size:13px; color:#A7F3D0;">Power Nap &amp; Récupération Cognitive (${ev.durationMin} min)</div>
++                  <div class="hide-mobile" style="font-size:11.5px; color:rgba(167, 243, 208, 0.75);">Décale automatiquement les missions suivantes (+${ev.durationMin}m) sans aucune suppression</div>
++                </div>
++              </div>
++              <div style="display:flex; align-items:center; gap:6px;">
++                <span class="mono" style="font-size:10px; padding:2px 8px; border-radius:99px; background:rgba(16,185,129,0.16); border:1px solid rgba(16,185,129,0.38); color:#34D399;">SIESTE FLASH</span>
++                <button type="button" onclick="window.removeEveningNap('${nap.id}', '${dayISO}', event)" class="btn-ghost evening-ctrl-btn" style="color:#F87171; padding:3px 7px;" title="Supprimer cette sieste">
++                  <i class="ph-bold ph-x"></i>
++                </button>
++              </div>
++            </div>
++          </div>
++        </div>
++      `;
++    }
++
+     if (ev.kind === 'dinner') {
+       return `
+         <div class="evening-slot-card evening-slot-dinner">
+@@ -631,7 +1269,7 @@ function renderEveningPlanner(weekDates) {
+             <span class="evening-dur-chip">+${(ev.durationMin / 60).toFixed(1)}h</span>
+           </div>
+           <div class="evening-slot-body" style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:8px;">
+-            <span style="font-size:12px; color:var(--text-subtle);"><i class="ph ph-sparkle"></i> Créneau libre (${ev.durationMin} min) — Révise tes post-its ou avance une mission</span>
++            <span style="font-size:12px; color:var(--text-subtle);"><i class="ph ph-sparkle"></i> Créneau libre (${ev.durationMin} min) — Glisse une mission ici ou pose une sieste</span>
+           </div>
+         </div>
+       `;
+@@ -664,6 +1302,7 @@ function renderEveningPlanner(weekDates) {
+         <div class="evening-slot-body">
+           <div class="evening-task-layout">
+             <div class="evening-task-main">
++              <span class="k-handle evening-drag-handle" title="Glisser pour réordonner sur la timeline">⠿</span>
+               <button type="button" class="check-touch-zone" onclick="event.stopPropagation(); window.toggleTaskFromEvening('${t.id}', '${dayISO}', event)" title="${isDone ? 'Décocher la mission' : 'Valider cette mission (reste affichée dans le créneau)'}">
+                 <span class="custom-check ${isDone ? 'checked' : ''}">${isDone ? '<i class="ph-bold ph-check text-xs"></i>' : ''}</span>
+               </button>
+@@ -671,8 +1310,10 @@ function renderEveningPlanner(weekDates) {
+                 <div class="evening-task-badges">
+                   ${renderTaskTypeBadge(t.type)}
+                   <span class="subj-badge"><span class="subj-dot" style="background:${s.color};"></span>${escapeHtml(s.short)}</span>
++                  ${t._pedagoChainLabel ? `<span class="mono" style="font-size:10px; padding:1px 6px; border-radius:5px; background:rgba(56,189,248,0.14); border:1px solid rgba(56,189,248,0.32); color:#38BDF8; font-weight:600;" title="Ordonnancement pédagogique automatique (Cours → TD/Exos → DM)"><i class="ph-bold ph-flow-arrow"></i> ${escapeHtml(t._pedagoChainLabel)}</span>` : ''}
+                   ${isDone ? `<span class="mono" style="font-size:10px; padding:1px 6px; border-radius:5px; background:rgba(16,185,129,0.18); border:1px solid rgba(16,185,129,0.38); color:#34D399; font-weight:700;">VALIDÉ</span>` : ''}
+                   ${ev.partIndex ? `<span class="mono" style="font-size:10px; padding:1px 6px; border-radius:5px; background:rgba(255,255,255,0.08); color:var(--text-muted);">Partie ${ev.partIndex}/${ev.totalParts}</span>` : ''}
++                  ${ev.shiftedPastBedtime ? `<span class="mono" style="font-size:10px; padding:1px 6px; border-radius:5px; background:rgba(245,158,11,0.15); border:1px solid rgba(245,158,11,0.35); color:#FBBF24;">Décalé (Sieste)</span>` : ''}
+                 </div>
+                 <div class="evening-task-title" style="${isDone ? 'text-decoration:line-through; color:var(--text-subtle);' : 'color:var(--text-main);'}">${escapeHtml(t.title)}</div>
+                 ${phaseLbl ? `<div style="font-size:11.5px; color:${isDone ? '#10B981' : '#38BDF8'}; margin-top:3px; font-weight:600; ${isDone ? 'text-decoration:line-through;' : ''}"><i class="ph-bold ph-git-commit"></i> ${escapeHtml(phaseLbl)}</div>` : ''}
+@@ -683,8 +1324,8 @@ function renderEveningPlanner(weekDates) {
+               <span class="evening-desktop-due mono" style="font-size:11px; font-weight:700; color:${p.color}; margin-right:4px;">${isDone ? 'TERMINÉ' : p.dayLabel}</span>
+               <button type="button" onclick="event.stopPropagation(); window.adjustEveningTaskDuration('${t.id}', -0.25, event)" class="btn-ghost evening-ctrl-btn" title="Réduire le temps ce soir (-15 min)">-15m</button>
+               <button type="button" onclick="event.stopPropagation(); window.adjustEveningTaskDuration('${t.id}', 0.25, event)" class="btn-ghost evening-ctrl-btn" title="Augmenter le temps ce soir (+15 min)">+15m</button>
+-              <button type="button" onclick="event.stopPropagation(); window.moveEveningTaskOrder('${t.id}', -1, event)" class="btn-ghost evening-ctrl-btn" title="Monter dans la soirée"><i class="ph-bold ph-arrow-up"></i></button>
+-              <button type="button" onclick="event.stopPropagation(); window.moveEveningTaskOrder('${t.id}', 1, event)" class="btn-ghost evening-ctrl-btn" title="Descendre dans la soirée"><i class="ph-bold ph-arrow-down"></i></button>
++              <button type="button" onclick="event.stopPropagation(); window.moveEveningTaskOrder('${t.id}', -1, event)" class="btn-ghost evening-ctrl-btn" title="Monter dans la timeline"><i class="ph-bold ph-arrow-up"></i></button>
++              <button type="button" onclick="event.stopPropagation(); window.moveEveningTaskOrder('${t.id}', 1, event)" class="btn-ghost evening-ctrl-btn" title="Descendre dans la timeline"><i class="ph-bold ph-arrow-down"></i></button>
+               <button type="button" onclick="event.stopPropagation(); window.deferTaskToOverflow('${t.id}', event)" class="btn-ghost evening-ctrl-btn evening-ctrl-defer" title="Reporter (Basculer dans À reporter)"><i class="ph-bold ph-arrow-elbow-right"></i> <span class="evening-defer-lbl">Reporter</span></button>
+             </div>
+           </div>
+@@ -716,7 +1357,7 @@ function renderEveningPlanner(weekDates) {
+       <div class="evening-overflow-empty">
+         <i class="ph-bold ph-check-circle" style="font-size:20px; color:#10B981; margin-bottom:4px;"></i>
+         <div style="font-weight:600; font-size:12.5px; color:var(--text-main);">Aucun débordement ce soir</div>
+-        <div style="font-size:11.5px; color:var(--text-muted);">Toutes vos missions actives rentrent avant ${escapeHtml(cfg.bedtime || '23:00')}.</div>
++        <div style="font-size:11.5px; color:var(--text-muted);">Toutes vos missions actives rentrent dans l'After-Hours Engine avant ${escapeHtml(cfg.bedtime || '23:00')}.</div>
+       </div>
+     `
+     : model.overflowTasks.map(item => {
+@@ -732,6 +1373,7 @@ function renderEveningPlanner(weekDates) {
+                style="border-left:3px solid ${s.color}; padding:12px 14px;">
+             <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:8px; margin-bottom:6px;">
+               <div style="display:flex; align-items:center; gap:6px; flex-wrap:wrap;">
++                <span class="k-handle evening-drag-handle" title="Glisser vers la timeline">⠿</span>
+                 ${renderTaskTypeBadge(t.type)}
+                 <span class="subj-badge"><span class="subj-dot" style="background:${s.color};"></span>${escapeHtml(s.short)}</span>
+               </div>
+@@ -757,10 +1399,13 @@ function renderEveningPlanner(weekDates) {
+            ondragleave="window.onEveningDragLeave(event)"
+            ondrop="window.onEveningDropToTimeline(event)">
+         <div class="evening-section-head">
+-          <div style="font-size:12.5px; font-weight:700; text-transform:uppercase; letter-spacing:0.04em; color:var(--text-muted);">
+-            <i class="ph-bold ph-list-numbers"></i> Programme du soir · ${DAYS_LABELS[selDay]} ${formatShortDate(selDate)} ${isToday ? '(Ce soir)' : ''}
++          <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
++            <span style="font-size:12.5px; font-weight:700; text-transform:uppercase; letter-spacing:0.04em; color:var(--text-muted);">
++              <i class="ph-bold ph-cpu" style="color:#38BDF8;"></i> After-Hours Engine · ${dayLabels[selDay] || ''} ${formatShortDate(selDate)} ${isToday ? '(Aujourd\'hui)' : ''}
++            </span>
++            ${windowsSummaryBadges}
+           </div>
+-          <span class="hide-mobile" style="font-size:11.5px; color:var(--text-subtle);">Glisser-déposer pour réordonner</span>
++          <span class="hide-mobile" style="font-size:11.5px; color:var(--text-subtle);">Flux Cours → TD → DM · Glisser ⠿ pour réordonner</span>
+         </div>
+         <div class="evening-timeline-stack">
+           ${timelineHtml}
+@@ -779,7 +1424,7 @@ function renderEveningPlanner(weekDates) {
+           <span class="mono" style="font-size:11px; color:var(--text-subtle);">Après ${escapeHtml(cfg.bedtime || '23:00')}</span>
+         </div>
+         <p class="hide-mobile" style="font-size:11.5px; color:var(--text-muted); margin-bottom:12px;">
+-          Missions dépassant le couvre-feu. Clique sur « Prioriser ce soir » pour les placer en tête.
++          Missions hors enveloppe horaire. Glisse la poignée ⠿ vers la timeline ou clique sur « Prioriser ce soir ».
+         </p>
+         <div style="display:flex; flex-direction:column; gap:10px;">
+           ${overflowHtml}
+diff --git a/js/config.js b/js/config.js
+index 40c4ec0..1e1f4f8 100644
+--- a/js/config.js
++++ b/js/config.js
+@@ -90,11 +90,71 @@ const DEFAULT_SETTINGS = {
+   dinnerStart: '19:00',      // Début pause dîner
+   dinnerEnd: '20:00',        // Fin pause dîner
+   bedtime: '23:00',          // Couvre-feu / heure de coucher cible
+-  defaultClassEnd: '17:30'   // Heure de début soirée par défaut si aucun cours l'après-midi
++  defaultClassEnd: '17:30',  // Heure de début soirée par défaut si aucun cours l'après-midi
++  commuteBufferMin: 30,      // Buffer trajet / transition (min) après les cours et avant une séance tardive
++  ankiDeck: 'PCSI::Vocabulaire' // Deck Anki cible (supporte Parent::Enfant)
+ };
+ 
+ const DAYS_LABELS = ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi'];
+ const DAYS_SHORT = ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam'];
++const AFTER_HOURS_DAYS_LABELS = ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi', 'Dimanche'];
++const AFTER_HOURS_DAYS_SHORT = ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'];
++
++/**
++ * Détecte les jours fériés français (fixes + mobiles calculés via algorithme de Meeus/Jones/Butcher)
++ */
++function getFrenchBankHolidayName(dateObj) {
++  if (!(dateObj instanceof Date) || isNaN(dateObj.getTime())) return null;
++  const y = dateObj.getFullYear();
++  const m = dateObj.getMonth() + 1;
++  const d = dateObj.getDate();
++  const mmdd = `${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
++
++  const fixed = {
++    '01-01': 'Jour de l\'An',
++    '05-01': 'Fête du Travail',
++    '05-08': 'Victoire 1945',
++    '07-14': 'Fête Nationale',
++    '08-15': 'Assomption',
++    '11-01': 'Toussaint',
++    '11-11': 'Armistice 1918',
++    '12-25': 'Noël'
++  };
++  if (fixed[mmdd]) return fixed[mmdd];
++
++  // Calcul de Pâques (algorithme de Meeus)
++  const a = y % 19;
++  const b = Math.floor(y / 100);
++  const c = y % 100;
++  const d1 = Math.floor(b / 4);
++  const e = b % 4;
++  const f = Math.floor((b + 8) / 25);
++  const g = Math.floor((b - f + 1) / 3);
++  const h = (19 * a + b - d1 - g + 15) % 30;
++  const i = Math.floor(c / 4);
++  const k = c % 4;
++  const l = (32 + 2 * e + 2 * i - h - k) % 7;
++  const m1 = Math.floor((a + 11 * h + 22 * l) / 451);
++  const easterMonth = Math.floor((h + l - 7 * m1 + 114) / 31);
++  const easterDay = ((h + l - 7 * m1 + 114) % 31) + 1;
++  const easter = new Date(y, easterMonth - 1, easterDay);
++
++  const addDays = (base, offset) => {
++    const dt = new Date(base);
++    dt.setDate(dt.getDate() + offset);
++    return dt.getMonth() + 1 === m && dt.getDate() === d;
++  };
++
++  if (addDays(easter, 1)) return 'Lundi de Pâques';
++  if (addDays(easter, 39)) return 'Ascension';
++  if (addDays(easter, 50)) return 'Lundi de Pentecôte';
++  return null;
++}
++
++function isFrenchBankHoliday(dateObj) {
++  return Boolean(getFrenchBankHolidayName(dateObj));
++}
++
+ 
+ const DEFAULT_ERROR_TYPES = [
+   { id: 'et_calc', label: 'Erreur de calcul', icon: '🔢' },
+diff --git a/js/daily_drop.js b/js/daily_drop.js
+index 610e2c0..c6cfc45 100644
+--- a/js/daily_drop.js
++++ b/js/daily_drop.js
+@@ -195,6 +195,202 @@ window.toggleCultureGAccordion = function() {
+   }
+ };
+ 
++let currentDropAnkiItems = [];
++
++function registerAnkiItem(front, back, tag = 'Vocabulaire') {
++  const idx = currentDropAnkiItems.length;
++  currentDropAnkiItems.push({ front: String(front || ''), back: String(back || ''), tag });
++  return idx;
++}
++
++function renderAnkiTriggerBtn(ankiIdx, label = '+ Anki') {
++  return `<button type="button" onclick="event.stopPropagation(); window.openAnkiPopinByIndex(${ankiIdx})" class="btn-ghost dd-anki-btn mono" style="padding:2px 8px; font-size:10.5px; font-weight:700; color:#38BDF8; border-color:rgba(56,189,248,0.32); background:rgba(56,189,248,0.08); border-radius:6px;" title="Envoyer vers Anki via AnkiConnect (localhost:8765)">[${escapeHtml(label)}]</button>`;
++}
++
++function ensureAnkiModalMounted() {
++  if (document.getElementById('anki-modal')) return;
++  const modal = document.createElement('div');
++  modal.id = 'anki-modal';
++  modal.className = 'modal-backdrop';
++  modal.innerHTML = `
++    <div class="modal-box" style="max-width:480px;">
++      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px;">
++        <div style="display:flex; align-items:center; gap:9px;">
++          <span style="width:32px; height:32px; border-radius:9px; background:rgba(56,189,248,0.14); border:1px solid rgba(56,189,248,0.32); color:#38BDF8; display:inline-flex; align-items:center; justify-content:center; font-size:16px;">
++            <i class="ph-bold ph-cards"></i>
++          </span>
++          <div>
++            <h3 style="font-size:15px; font-weight:700;">Ajouter à Anki (AnkiConnect)</h3>
++            <div class="mono" style="font-size:10.5px; color:var(--text-subtle);">POST http://localhost:8765 · Note Type : Basic</div>
++          </div>
++        </div>
++        <button type="button" onclick="window.closeAnkiModal()" class="btn-ghost" style="padding:4px 7px; border:none;"><i class="ph ph-x"></i></button>
++      </div>
++      <form onsubmit="window.submitAnkiCard(event)" style="display:flex; flex-direction:column; gap:12px;">
++        <div>
++          <label style="font-size:11.5px; font-weight:600; color:var(--text-muted); display:flex; justify-content:space-between; margin-bottom:4px;">
++            <span>Target Anki Deck <small style="color:var(--text-subtle);">(Syntaxe Parent::Enfant)</small></span>
++            <span class="mono" style="font-size:10px; color:#38BDF8;">Défaut : PCSI::Vocabulaire</span>
++          </label>
++          <input type="text" id="anki-deck-input" class="saas-input mono" placeholder="PCSI::Vocabulaire" />
++        </div>
++        <div>
++          <label style="font-size:11.5px; font-weight:600; color:var(--text-muted); display:block; margin-bottom:4px;">Front (Recto — Mot, Expression ou Notion) *</label>
++          <input type="text" id="anki-front-input" class="saas-input" required />
++        </div>
++        <div>
++          <label style="font-size:11.5px; font-weight:600; color:var(--text-muted); display:block; margin-bottom:4px;">Back (Verso — Traduction, Définition &amp; Exemple) *</label>
++          <textarea id="anki-back-input" class="saas-input" rows="4" style="resize:vertical;" required></textarea>
++        </div>
++        <div id="anki-modal-status" style="display:none; font-size:11.5px; padding:8px 10px; border-radius:8px;"></div>
++        <div style="display:flex; justify-content:flex-end; gap:8px; margin-top:4px;">
++          <button type="button" onclick="window.closeAnkiModal()" class="btn-ghost">Annuler</button>
++          <button type="submit" id="anki-submit-btn" class="btn-primary">
++            <i class="ph-bold ph-paper-plane-tilt"></i> <span>Ajouter la carte</span>
++          </button>
++        </div>
++      </form>
++    </div>
++  `;
++  modal.addEventListener('click', (e) => {
++    if (e.target === modal) window.closeAnkiModal();
++  });
++  document.body.appendChild(modal);
++}
++
++window.openAnkiModal = function(front = '', back = '', customDeck = null) {
++  ensureAnkiModalMounted();
++  const cfg = (typeof state !== 'undefined' && state.settings) ? state.settings : DEFAULT_SETTINGS;
++  const targetDeck = String(customDeck || cfg.ankiDeck || 'PCSI::Vocabulaire').trim() || 'PCSI::Vocabulaire';
++
++  const deckEl = document.getElementById('anki-deck-input');
++  const frontEl = document.getElementById('anki-front-input');
++  const backEl = document.getElementById('anki-back-input');
++  const statusEl = document.getElementById('anki-modal-status');
++
++  if (deckEl) deckEl.value = targetDeck;
++  if (frontEl) frontEl.value = front || '';
++  if (backEl) backEl.value = back || '';
++  if (statusEl) {
++    statusEl.style.display = 'none';
++    statusEl.textContent = '';
++  }
++
++  const m = document.getElementById('anki-modal');
++  if (m) m.classList.add('open');
++  if (typeof window.focusModalInput === 'function') window.focusModalInput('anki-front-input');
++};
++
++window.openAnkiPopinByIndex = function(idx) {
++  const item = currentDropAnkiItems[idx];
++  if (!item) return;
++  window.openAnkiModal(item.front, item.back);
++};
++
++window.closeAnkiModal = function() {
++  const m = document.getElementById('anki-modal');
++  if (m) m.classList.remove('open');
++};
++
++window.submitAnkiCard = async function(e) {
++  if (e) e.preventDefault();
++  const deckEl = document.getElementById('anki-deck-input');
++  const frontEl = document.getElementById('anki-front-input');
++  const backEl = document.getElementById('anki-back-input');
++  const btn = document.getElementById('anki-submit-btn');
++  const statusEl = document.getElementById('anki-modal-status');
++
++  const deckName = String(deckEl ? deckEl.value : '').trim() || 'PCSI::Vocabulaire';
++  const frontRaw = String(frontEl ? frontEl.value : '').trim();
++  const backRaw = String(backEl ? backEl.value : '').trim();
++
++  if (!frontRaw || !backRaw) {
++    showToast('Renseigne le Recto (Front) et le Verso (Back)');
++    return;
++  }
++
++  // Sauvegarder le deck cible s'il a été personnalisé
++  if (typeof state !== 'undefined' && state.settings) {
++    state.settings.ankiDeck = deckName;
++    if (typeof saveState === 'function') saveState();
++  }
++
++  const frontHtml = escapeHtml(frontRaw).replace(/\r?\n/g, '<br>');
++  const backHtml = escapeHtml(backRaw).replace(/\r?\n/g, '<br>');
++
++  if (btn) {
++    btn.disabled = true;
++    btn.innerHTML = `<i class="ph-bold ph-spinner"></i> <span>Connexion à Anki...</span>`;
++  }
++
++  try {
++    // 1. Créer le deck (supporte la hiérarchie Parent::Child) au cas où il n'existe pas encore dans Anki
++    await fetch('http://localhost:8765', {
++      method: 'POST',
++      headers: { 'Content-Type': 'application/json' },
++      body: JSON.stringify({
++        action: 'createDeck',
++        version: 6,
++        params: { deck: deckName }
++      })
++    });
++
++    // 2. Appel addNote via AnkiConnect
++    const res = await fetch('http://localhost:8765', {
++      method: 'POST',
++      headers: { 'Content-Type': 'application/json' },
++      body: JSON.stringify({
++        action: 'addNote',
++        version: 6,
++        params: {
++          note: {
++            deckName,
++            modelName: 'Basic',
++            fields: {
++              Front: frontHtml,
++              Back: backHtml
++            },
++            options: {
++              allowDuplicate: false,
++              duplicateScope: 'deck'
++            },
++            tags: ['pcsi_os', 'daily_drop']
++          }
++        }
++      })
++    });
++
++    const data = await res.json();
++    if (data && data.error) {
++      if (statusEl) {
++        statusEl.style.display = 'block';
++        statusEl.style.background = 'rgba(245, 158, 11, 0.14)';
++        statusEl.style.border = '1px solid rgba(245, 158, 11, 0.35)';
++        statusEl.style.color = '#FBBF24';
++        statusEl.textContent = `AnkiConnect : ${data.error}`;
++      }
++      showToast(`Anki : ${data.error}`);
++    } else {
++      window.closeAnkiModal();
++      showToast(`Carte ajoutée dans Anki (${deckName}) ✓`);
++    }
++  } catch (err) {
++    if (statusEl) {
++      statusEl.style.display = 'block';
++      statusEl.style.background = 'rgba(239, 68, 68, 0.12)';
++      statusEl.style.border = '1px solid rgba(239, 68, 68, 0.35)';
++      statusEl.style.color = '#FCA5A5';
++      statusEl.innerHTML = `Impossible de joindre <b>http://localhost:8765</b>. Vérifie qu'<b>Anki</b> est ouvert sur ton ordinateur avec l'extension <b>AnkiConnect</b> (code <code class="mono">2055492159</code>).`;
++    }
++    showToast('Anki non détecté sur localhost:8765 (vérifie qu\'Anki est ouvert)');
++  } finally {
++    if (btn) {
++      btn.disabled = false;
++      btn.innerHTML = `<i class="ph-bold ph-paper-plane-tilt"></i> <span>Ajouter la carte</span>`;
++    }
++  }
++};
++
+ function renderDailyDrop() {
+   try { localStorage.setItem(DAILY_DROP_SEEN_KEY, formatDateISO(new Date())); } catch (e) {}
+   updateDailyDropBadges(false);
+@@ -202,6 +398,8 @@ function renderDailyDrop() {
+ 
+   const mount = document.getElementById('daily-drop-mount');
+   if (!mount) return;
++  currentDropAnkiItems = [];
++
+   const data = dailyCultureData || FALLBACK_DAILY_CULTURE;
+   const drops = (data && Array.isArray(data.drops) && data.drops.length) ? data.drops : FALLBACK_DAILY_CULTURE.drops;
+   const drop = drops[currentDropIndex] || drops[0];
+@@ -218,46 +416,83 @@ function renderDailyDrop() {
+ 
+   const focusMode = currentFocusTab || f.defaultMode || 'grammar';
+ 
++  // Enregistrer le Word of the Day pour AnkiConnect
++  const wotdBackParts = [w.meaning || ''];
++  if (w.example) wotdBackParts.push(`Ex: "${w.example}"`);
++  if (w.exampleTranslation) wotdBackParts.push(`→ ${w.exampleTranslation}`);
++  const wotdAnkiIdx = registerAnkiItem(
++    `${w.word || ''}${w.phonetic ? ' ' + w.phonetic : ''}`,
++    wotdBackParts.filter(Boolean).join('\n')
++  );
++
++  // Enregistrer la notion de Culture G pour AnkiConnect
++  const cgAnkiIdx = registerAnkiItem(
++    cg.title || 'Notion Culture G',
++    `${cg.hook || ''}${cg.category ? '\n[' + cg.category + ']' : ''}`
++  );
++
+   const focusContentHtml = focusMode === 'vocab'
+     ? `
+       <div style="display:flex; flex-direction:column; gap:8px;">
+-        ${(f.topicalWords || []).map((item, idx) => `
+-          <div class="dd-vocab-row">
+-            <div style="display:flex; justify-content:space-between; align-items:baseline; gap:10px; flex-wrap:wrap;">
+-              <span style="font-weight:700; font-size:13.5px; color:#F8FAFC;">
+-                <span class="mono" style="font-size:11px; color:#EAB308; margin-right:6px;">0${idx + 1}.</span>${escapeHtml(item.term)}
+-              </span>
+-              <span style="font-size:12.5px; font-weight:600; color:#38BDF8;">${escapeHtml(item.translation)}</span>
++        ${(f.topicalWords || []).map((item, idx) => {
++          const itemAnkiIdx = registerAnkiItem(
++            item.term,
++            `${item.translation || ''}${item.note ? '\nNote : ' + item.note : ''}`
++          );
++          return `
++            <div class="dd-vocab-row">
++              <div style="display:flex; justify-content:space-between; align-items:center; gap:10px; flex-wrap:wrap;">
++                <span style="font-weight:700; font-size:13.5px; color:#F8FAFC;">
++                  <span class="mono" style="font-size:11px; color:#EAB308; margin-right:6px;">0${idx + 1}.</span>${escapeHtml(item.term)}
++                </span>
++                <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
++                  <span style="font-size:12.5px; font-weight:600; color:#38BDF8;">${escapeHtml(item.translation)}</span>
++                  ${renderAnkiTriggerBtn(itemAnkiIdx)}
++                </div>
++              </div>
++              ${item.note ? `<div style="font-size:11.5px; color:var(--text-muted); margin-top:3px; font-style:italic;">${escapeHtml(item.note)}</div>` : ''}
+             </div>
+-            ${item.note ? `<div style="font-size:11.5px; color:var(--text-muted); margin-top:3px; font-style:italic;">${escapeHtml(item.note)}</div>` : ''}
+-          </div>
+-        `).join('')}
++          `;
++        }).join('')}
+       </div>
+     `
+     : `
+       <div style="display:flex; flex-direction:column; gap:12px;">
+-        ${(f.grammarTraps || []).map((gt, idx) => `
+-          <div class="dd-grammar-card">
+-            <div style="display:flex; align-items:center; gap:8px; margin-bottom:6px; flex-wrap:wrap;">
+-              <span class="mono" style="font-size:10.5px; font-weight:700; padding:2px 7px; border-radius:6px; background:rgba(239, 68, 68, 0.16); border:1px solid rgba(239, 68, 68, 0.35); color:#F87171;">PIÈGE #${idx + 1}</span>
+-              <span style="font-weight:700; font-size:13.5px; color:var(--text-main);">${escapeHtml(gt.title)}</span>
+-            </div>
+-            <p style="font-size:12.5px; color:var(--text-muted); line-height:1.55; margin-bottom:10px;">${escapeHtml(gt.rule)}</p>
+-            <div class="dd-trap-compare-grid" style="display:grid; grid-template-columns:repeat(auto-fit, minmax(210px, 1fr)); gap:8px;">
+-              <div style="padding:8px 10px; border-radius:8px; background:rgba(239, 68, 68, 0.08); border:1px solid rgba(239, 68, 68, 0.22); font-size:12px;">
+-                <div class="mono" style="font-size:10px; font-weight:700; color:#F87171; margin-bottom:2px;">✗ ERREUR CLASSIQUE</div>
+-                <div style="color:#FCA5A5; text-decoration:line-through;">${escapeHtml(gt.wrong)}</div>
++        ${(f.grammarTraps || []).map((gt, idx) => {
++          const gtAnkiIdx = registerAnkiItem(
++            gt.title,
++            `${gt.rule || ''}\n✓ ${gt.right || ''}\n(✗ ${gt.wrong || ''})`
++          );
++          return `
++            <div class="dd-grammar-card">
++              <div style="display:flex; align-items:center; justify-content:space-between; gap:8px; margin-bottom:6px; flex-wrap:wrap;">
++                <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
++                  <span class="mono" style="font-size:10.5px; font-weight:700; padding:2px 7px; border-radius:6px; background:rgba(239, 68, 68, 0.16); border:1px solid rgba(239, 68, 68, 0.35); color:#F87171;">PIÈGE #${idx + 1}</span>
++                  <span style="font-weight:700; font-size:13.5px; color:var(--text-main);">${escapeHtml(gt.title)}</span>
++                </div>
++                ${renderAnkiTriggerBtn(gtAnkiIdx)}
+               </div>
+-              <div style="padding:8px 10px; border-radius:8px; background:rgba(16, 185, 129, 0.08); border:1px solid rgba(16, 185, 129, 0.25); font-size:12px;">
+-                <div class="mono" style="font-size:10px; font-weight:700; color:#34D399; margin-bottom:2px;">✓ BON ANGLAIS</div>
+-                <div style="color:#D1FAE5; font-weight:600;">${escapeHtml(gt.right)}</div>
++              <p style="font-size:12.5px; color:var(--text-muted); line-height:1.55; margin-bottom:10px;">${escapeHtml(gt.rule)}</p>
++              <div class="dd-trap-compare-grid" style="display:grid; grid-template-columns:repeat(auto-fit, minmax(210px, 1fr)); gap:8px;">
++                <div style="padding:8px 10px; border-radius:8px; background:rgba(239, 68, 68, 0.08); border:1px solid rgba(239, 68, 68, 0.22); font-size:12px;">
++                  <div class="mono" style="font-size:10px; font-weight:700; color:#F87171; margin-bottom:2px;">✗ ERREUR CLASSIQUE</div>
++                  <div style="color:#FCA5A5; text-decoration:line-through;">${escapeHtml(gt.wrong)}</div>
++                </div>
++                <div style="padding:8px 10px; border-radius:8px; background:rgba(16, 185, 129, 0.08); border:1px solid rgba(16, 185, 129, 0.25); font-size:12px;">
++                  <div class="mono" style="font-size:10px; font-weight:700; color:#34D399; margin-bottom:2px;">✓ BON ANGLAIS</div>
++                  <div style="color:#D1FAE5; font-weight:600;">${escapeHtml(gt.right)}</div>
++                </div>
+               </div>
+             </div>
+-          </div>
+-        `).join('')}
++          `;
++        }).join('')}
+       </div>
+     `;
+ 
++  const currentDeckBadge = (typeof state !== 'undefined' && state.settings && state.settings.ankiDeck)
++    ? state.settings.ankiDeck
++    : 'PCSI::Vocabulaire';
++
+   mount.innerHTML = `
+     <!-- BARRE D'ÉDITION DU JOUR -->
+     <div class="saas-card dd-header-bar" style="padding:16px 20px; margin-bottom:18px; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px;">
+@@ -269,6 +504,7 @@ function renderDailyDrop() {
+           <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+             <span class="mono" style="font-size:10.5px; font-weight:700; color:#FACC15; text-transform:uppercase; letter-spacing:0.06em;">DAILY DROP · ÉDITION #${currentDropIndex + 1}/${drops.length}</span>
+             ${isTodayEdition ? `<span class="mono" style="font-size:10px; padding:1px 7px; border-radius:99px; background:rgba(16,185,129,0.16); border:1px solid rgba(16,185,129,0.35); color:#34D399;">AUJOURD'HUI</span>` : ''}
++            <span class="mono" style="font-size:10px; padding:1px 7px; border-radius:99px; background:rgba(56,189,248,0.12); border:1px solid rgba(56,189,248,0.3); color:#38BDF8;" title="Deck Anki cible configurable dans les Paramètres">Deck : ${escapeHtml(currentDeckBadge)}</span>
+           </div>
+           <h2 style="font-size:15.5px; font-weight:700; color:var(--text-main);">${escapeHtml(drop.theme || 'English & Humanités CPGE')}</h2>
+         </div>
+@@ -286,11 +522,14 @@ function renderDailyDrop() {
+       <!-- 1. WORD OF THE DAY (ENGLISH) -->
+       <div class="saas-card dd-card" style="padding:20px 22px; display:flex; flex-direction:column; justify-content:space-between; border-top:2px solid #EAB308;">
+         <div>
+-          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
++          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px; gap:8px; flex-wrap:wrap;">
+             <span class="mono" style="font-size:10.5px; font-weight:700; color:#EAB308; text-transform:uppercase; letter-spacing:0.06em;">
+               <i class="ph-bold ph-translate"></i> Word of the Day · English
+             </span>
+-            <span class="mono" style="font-size:11px; color:var(--text-subtle);">${escapeHtml(w.partOfSpeech || 'noun')}</span>
++            <div style="display:flex; align-items:center; gap:8px;">
++              <span class="mono" style="font-size:11px; color:var(--text-subtle);">${escapeHtml(w.partOfSpeech || 'noun')}</span>
++              ${renderAnkiTriggerBtn(wotdAnkiIdx)}
++            </div>
+           </div>
+ 
+           <div style="display:flex; align-items:baseline; gap:12px; flex-wrap:wrap; margin-bottom:6px;">
+@@ -312,9 +551,15 @@ function renderDailyDrop() {
+         <div>
+           <div class="mono" style="font-size:10.5px; font-weight:700; color:var(--text-subtle); text-transform:uppercase; margin-bottom:8px;">Expressions prêtes à l'emploi</div>
+           <div style="display:flex; flex-wrap:wrap; gap:6px;">
+-            ${(w.collocations || []).map(col => `
+-              <span class="mono" style="font-size:11.5px; padding:4px 9px; border-radius:7px; background:rgba(234, 179, 8, 0.1); border:1px solid rgba(234, 179, 8, 0.25); color:#FEF08A;">${escapeHtml(col)}</span>
+-            `).join('')}
++            ${(w.collocations || []).map(col => {
++              const colAnkiIdx = registerAnkiItem(col, `${w.word || ''} — ${w.meaning || ''}`);
++              return `
++                <span class="mono" style="display:inline-flex; align-items:center; gap:6px; font-size:11.5px; padding:4px 9px; border-radius:7px; background:rgba(234, 179, 8, 0.1); border:1px solid rgba(234, 179, 8, 0.25); color:#FEF08A;">
++                  <span>${escapeHtml(col)}</span>
++                  <button type="button" onclick="event.stopPropagation(); window.openAnkiPopinByIndex(${colAnkiIdx})" style="background:none; border:none; color:#38BDF8; font-weight:800; font-size:10px; cursor:pointer; padding:0;" title="Ajouter cette expression à Anki">[+ Anki]</button>
++                </span>
++              `;
++            }).join('')}
+           </div>
+         </div>
+       </div>
+@@ -350,9 +595,12 @@ function renderDailyDrop() {
+             <span class="mono" style="font-size:10.5px; font-weight:700; color:#C084FC; text-transform:uppercase; letter-spacing:0.06em;">
+               <i class="ph-bold ph-feather"></i> Culture G de Niche · Lettres, Histoire &amp; Philosophie
+             </span>
+-            <span class="mono" style="font-size:10.5px; padding:2px 8px; border-radius:6px; background:rgba(168, 85, 247, 0.15); border:1px solid rgba(168, 85, 247, 0.3); color:#D8B4FE;">
+-              ${escapeHtml(cg.category || 'Philosophie & Histoire')}
+-            </span>
++            <div style="display:flex; align-items:center; gap:6px;">
++              <span class="mono" style="font-size:10.5px; padding:2px 8px; border-radius:6px; background:rgba(168, 85, 247, 0.15); border:1px solid rgba(168, 85, 247, 0.3); color:#D8B4FE;">
++                ${escapeHtml(cg.category || 'Philosophie & Histoire')}
++              </span>
++              ${renderAnkiTriggerBtn(cgAnkiIdx)}
++            </div>
+           </div>
+ 
+           <h3 style="font-size:16.5px; font-weight:700; color:var(--text-main); line-height:1.35; margin-bottom:10px;">
+diff --git a/js/missions.js b/js/missions.js
+index 3d1a23a..9e55652 100644
+--- a/js/missions.js
++++ b/js/missions.js
+@@ -540,7 +540,7 @@ function renderCahier() {
+                 <div class="saas-card kanban-card" draggable="true" ondragstart="window.onKanbanDragStart(event, '${t.id}')" ondragend="window.onKanbanDragEnd(event)" style="border-left:3px solid ${s.color}; ${isDone ? 'opacity:0.5;' : ''}">
+                   <div class="k-head">
+                     <div class="k-head-l" style="flex-wrap:wrap;">
+-                      <span class="k-handle" onpointerdown="window.kPointerDown(event, '${t.id}')"><i class="ph-bold ph-dots-six-vertical"></i></span>
++                      <span class="k-handle" onpointerdown="window.kPointerDown(event, '${t.id}')" title="Glisser">⠿</span>
+                       <button type="button" class="check-touch-zone" onclick="event.stopPropagation(); window.toggleTask('${t.id}', event)" title="${isDone ? 'Marquer comme à faire' : 'Valider'}">
+                         <span class="custom-check ${isDone ? 'checked' : ''}">${isDone ? '<i class="ph-bold ph-check text-xs"></i>' : ''}</span>
+                       </button>
+diff --git a/js/portals.js b/js/portals.js
+index e635575..3621bb6 100644
+--- a/js/portals.js
++++ b/js/portals.js
+@@ -160,11 +160,21 @@ window.setDsSubjectOverride = function(val) {
+ 
+ window.updateSettingValue = function(key, val) {
+   if (!state.settings) state.settings = JSON.parse(JSON.stringify(DEFAULT_SETTINGS));
+-  state.settings[key] = val;
++  if (key === 'commuteBufferMin') {
++    const num = parseInt(val, 10);
++    state.settings.commuteBufferMin = Number.isFinite(num) ? Math.min(120, Math.max(0, num)) : 30;
++  } else if (key === 'ankiDeck') {
++    const cleanDeck = String(val || '').trim();
++    state.settings.ankiDeck = cleanDeck || 'PCSI::Vocabulaire';
++    showToast(`Deck Anki cible : ${state.settings.ankiDeck}`);
++  } else {
++    state.settings[key] = val;
++  }
+   saveState();
+   window.renderSettingsPanel();
+   if (state.activeTab === 'agenda') renderAgenda();
+   if (state.activeTab === 'cahier') renderCahier();
++  if (state.activeTab === 'dailydrop' && typeof renderDailyDrop === 'function') renderDailyDrop();
+ };
+ 
+ window.onTypeMultiplierInput = function(typeId, val) {
+@@ -532,15 +542,15 @@ window.renderSettingsPanel = function() {
+         </div>
+       </div>
+ 
+-      <!-- SECTION 2 : RYTHME DE VIE & PLANNING SOIRÉE -->
++      <!-- SECTION 2 : AFTER-HOURS ENGINE & INTÉGRATION ANKICONNECT -->
+       <div class="saas-card settings-card">
+         <div class="settings-card-head">
+           <div class="settings-card-ico" style="color:#A855F7; background:rgba(168,85,247,0.12); border-color:rgba(168,85,247,0.28);">
+-            <i class="ph-bold ph-moon-stars"></i>
++            <i class="ph-bold ph-cpu"></i>
+           </div>
+           <div>
+-            <h3 style="font-size:14.5px; font-weight:700;">Rythme de Vie &amp; Planning Soirée</h3>
+-            <p style="font-size:11.5px; color:var(--text-muted);">Paramètres horaires du planificateur nocturne d'internat (Knapsack)</p>
++            <h3 style="font-size:14.5px; font-weight:700;">After-Hours Engine &amp; AnkiConnect</h3>
++            <p style="font-size:11.5px; color:var(--text-muted);">Enveloppe horaire dynamique, buffer de trajet et deck Anki cible</p>
+           </div>
+         </div>
+ 
+@@ -568,9 +578,20 @@ window.renderSettingsPanel = function() {
+           </div>
+           <div>
+             <label style="font-size:11.5px; font-weight:600; color:var(--text-muted); display:block; margin-bottom:5px;">
+-              <i class="ph-bold ph-graduation-cap" style="color:#38BDF8;"></i> Fin des cours par défaut
++              <i class="ph-bold ph-person-simple-walk" style="color:#34D399;"></i> Buffer Trajet / Transition (min)
+             </label>
+-            <input type="time" class="saas-input mono" value="${escapeHtml(cfg.defaultClassEnd || '17:30')}" onchange="window.updateSettingValue('defaultClassEnd', this.value)" />
++            <input type="number" min="0" max="120" step="5" class="saas-input mono" value="${Number.isFinite(Number(cfg.commuteBufferMin)) ? Number(cfg.commuteBufferMin) : 30}" onchange="window.updateSettingValue('commuteBufferMin', this.value)" />
++          </div>
++        </div>
++
++        <div style="padding-top:10px; border-top:1px solid var(--border-subtle);">
++          <label style="font-size:11.5px; font-weight:600; color:var(--text-muted); display:flex; align-items:center; justify-content:space-between; margin-bottom:5px;">
++            <span><i class="ph-bold ph-cards" style="color:#38BDF8;"></i> Target Anki Deck <small style="color:var(--text-subtle); font-weight:400;">(Syntaxe Parent::Enfant)</small></span>
++            <span class="mono" style="font-size:10px; color:#38BDF8;">localhost:8765</span>
++          </label>
++          <input type="text" id="settings-anki-deck-input" class="saas-input mono" placeholder="PCSI::Vocabulaire (ex: Anglais::Vocabulaire)" value="${escapeHtml(cfg.ankiDeck || 'PCSI::Vocabulaire')}" onchange="window.updateSettingValue('ankiDeck', this.value)" />
++          <div style="font-size:11px; color:var(--text-subtle); margin-top:4px;">
++            Utilisé par les boutons <b>[+ Anki]</b> du Daily Drop. Défaut si vide : <code class="mono">PCSI::Vocabulaire</code>.
+           </div>
+         </div>
+ 
+diff --git a/js/state.js b/js/state.js
+index 424a4c1..1bda98a 100644
+--- a/js/state.js
++++ b/js/state.js
+@@ -17,7 +17,8 @@ let state = {
+     manualOrder: [],
+     excludedIds: [],
+     customDurations: {},
+-    pinnedEveningIds: []
++    pinnedEveningIds: [],
++    naps: {}
+   },
+   tasks: [],
+   schedule: [],
+@@ -99,9 +100,13 @@ function normalizeSettingsState() {
+   state.settings.dinnerEnd = state.settings.dinnerEnd || '20:00';
+   state.settings.bedtime = state.settings.bedtime || '23:00';
+   state.settings.defaultClassEnd = state.settings.defaultClassEnd || '17:30';
++  const buf = parseInt(state.settings.commuteBufferMin, 10);
++  state.settings.commuteBufferMin = Number.isFinite(buf) ? Math.min(120, Math.max(0, buf)) : 30;
++  const rawDeck = String(state.settings.ankiDeck || '').trim();
++  state.settings.ankiDeck = rawDeck || 'PCSI::Vocabulaire';
+ 
+   if (!state.eveningPlan || typeof state.eveningPlan !== 'object') {
+-    state.eveningPlan = { manualOrder: [], excludedIds: [], customDurations: {}, pinnedEveningIds: [] };
++    state.eveningPlan = { manualOrder: [], excludedIds: [], customDurations: {}, pinnedEveningIds: [], naps: {} };
+   }
+   if (!Array.isArray(state.eveningPlan.manualOrder)) state.eveningPlan.manualOrder = [];
+   if (!Array.isArray(state.eveningPlan.excludedIds)) state.eveningPlan.excludedIds = [];
+@@ -109,6 +114,9 @@ function normalizeSettingsState() {
+   if (!state.eveningPlan.customDurations || typeof state.eveningPlan.customDurations !== 'object') {
+     state.eveningPlan.customDurations = {};
+   }
++  if (!state.eveningPlan.naps || typeof state.eveningPlan.naps !== 'object' || Array.isArray(state.eveningPlan.naps)) {
++    state.eveningPlan.naps = {};
++  }
+   if (!Array.isArray(state.scheduleDocs)) {
+     state.scheduleDocs = [];
+   }
+diff --git a/js/ui.js b/js/ui.js
+index ec2767a..253a6e9 100644
+--- a/js/ui.js
++++ b/js/ui.js
+@@ -78,6 +78,7 @@ window.closeAnyOpenModal = function() {
+     ['portal-modal', () => window.closePortalModal && window.closePortalModal()],
+     ['subject-modal', () => window.closeSubjectModal && window.closeSubjectModal()],
+     ['tasktype-modal', () => window.closeTaskTypeModal && window.closeTaskTypeModal()],
++    ['anki-modal', () => window.closeAnkiModal && window.closeAnkiModal()],
+     ['onboarding-modal', () => window.skipOnboarding && window.skipOnboarding()]
+   ];
+   for (const [id, fn] of modalClosers) {
+@@ -161,10 +162,10 @@ window.switchTab = function(tabId) {
+   document.body.dataset.tab = tabId;
+   const headers = {
+     cahier: ['Missions & Cahier de Texte', 'Priorisation automatique selon le type de devoir, la date et la durée'],
+-    agenda: ['Emploi du temps & Planning Soirée', 'Grille des cours de la semaine et programme d\'étude du soir'],
++    agenda: ['Emploi du temps & After-Hours Engine', 'Grille des cours de la semaine et optimiseur intelligent de créneaux (Cours → TD → DM)'],
+     postits: ['Mur d\'Erreurs & Pièges Classiques', 'Post-its interactifs à relire avant chaque DS ou colle'],
+-    dailydrop: ['Daily Drop · Anglais & Culture G', 'Mot du jour, erreurs classiques à éviter en anglais, Culture G et presse'],
+-    sites: ['Portails, Données & Réglages', 'Horaires du soir, matières, coefficients et sauvegarde Cloud']
++    dailydrop: ['Daily Drop · Anglais & Culture G', 'Mot du jour, erreurs classiques à éviter en anglais, Culture G et export AnkiConnect'],
++    sites: ['Portails, Données & Réglages', 'After-Hours Engine, AnkiConnect, matières, coefficients et sauvegarde Cloud']
+   };
+   document.getElementById('view-title').textContent = headers[tabId][0];
+   document.getElementById('view-subtitle').textContent = headers[tabId][1];
+diff --git aa/index.html bb/index.html
+index 76c4742..c7f6096 100644
+--- aa/index.html
++++ bb/index.html
+@@ -58,9 +58,9 @@
+             <i class="ph ph-check-square-offset text-base"></i>
+             <span class="hide-collapsed">Missions</span>
+           </button>
+-          <button type="button" id="nav-agenda" onclick="window.switchTab('agenda')" class="nav-item" title="Emploi du temps &amp; Soirée">
++          <button type="button" id="nav-agenda" onclick="window.switchTab('agenda')" class="nav-item" title="Emploi du temps &amp; After-Hours Engine">
+             <i class="ph ph-calendar-blank text-base"></i>
+-            <span class="hide-collapsed">Agenda &amp; Soirée</span>
++            <span class="hide-collapsed">Agenda &amp; After-Hours</span>
+           </button>
+           <button type="button" id="nav-postits" onclick="window.switchTab('postits')" class="nav-item" title="Mur d'erreurs">
+             <i class="ph ph-note text-base"></i>
+@@ -223,7 +223,7 @@
+                 <i class="ph-bold ph-calendar-blank"></i> Grille Académique
+               </button>
+               <button type="button" id="agenda-tab-evening-btn" onclick="window.setAgendaSubTab('evening')" class="btn-ghost" style="padding:6px 13px; font-size:12.5px; border:none;">
+-                <i class="ph-bold ph-moon-stars"></i> Planning Soirée (17h → Coucher)
++                <i class="ph-bold ph-cpu"></i> After-Hours Engine
+               </button>
+             </div>
+           </div>
+diff --git aa/css/components.css bb/css/components.css
+index 953a98b..28b4d8c 100644
+--- aa/css/components.css
++++ bb/css/components.css
+@@ -685,6 +685,31 @@ select.saas-input option {
+   border-radius: 11px;
+   background: rgba(16, 185, 129, 0.03);
+ }
++.evening-drag-handle {
++  display: inline-flex;
++  align-items: center;
++  justify-content: center;
++  font-size: 14px;
++  line-height: 1;
++  color: var(--text-subtle);
++  cursor: grab;
++  padding: 2px 4px;
++  border-radius: 4px;
++  user-select: none;
++  transition: color 0.15s ease, background-color 0.15s ease;
++}
++.evening-drag-handle:hover {
++  color: var(--text-main);
++  background: rgba(255, 255, 255, 0.07);
++}
++.evening-drag-handle:active {
++  cursor: grabbing;
++}
++.dd-anki-btn:hover {
++  background: rgba(56, 189, 248, 0.18) !important;
++  border-color: rgba(56, 189, 248, 0.55) !important;
++  color: #7DD3FC !important;
++}
+ 
+ /* Daily Drop Styles */
+ .dd-unread-dot {
