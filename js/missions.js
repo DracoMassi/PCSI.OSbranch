@@ -151,9 +151,10 @@ function computePressure(task) {
   // 2. Durée Estimée (échelle 0 - 100)
   const durationScore = 100 * (1 - Math.exp(-remDur / 2.4));
 
-  // 3. AutoDSFactor (Boost automatique si matière au programme du DS de samedi)
+  // 3. AutoDSFactor (Boost automatique si matière au programme du prochain DS)
   const dsSubjects = getUpcomingSaturdayDsSubjects();
-  const isDsSubject = cfg.autoDsBoost && (dsSubjects.includes(task.subject) || task.type === 'DS');
+  const isDsTitle = /\b(ds|devoir\s+surveill[eé]|concours\s+blanc)\b/i.test(task.title || '');
+  const isDsSubject = Boolean(cfg.autoDsBoost && (dsSubjects.includes(task.subject) || task.type === 'DS' || isDsTitle));
   const dsFactor = isDsSubject ? (parseFloat(cfg.dsBoostFactor) || 1.4) : 1.0;
 
   // Calcul exact de la Tension avec TypeMultiplier * ManualImportance * AutoDSFactor
@@ -313,12 +314,14 @@ window.quickAddMission = function(e) {
   const tInput = document.getElementById('qa-title');
   const t = tInput.value.trim();
   if (!t) return;
-  const detectedType = currentQuickAddType || inferTaskTypeFromTitle(t);
+  const titleInferredType = inferTaskTypeFromTitle(t);
+  const explicitPrefixMatch = /^(ds|dm|td|tp|colle|kh[ôo]lle|cours|r[ée]vision)\b/i.test(t);
+  const finalType = explicitPrefixMatch ? titleInferredType : (currentQuickAddType || titleInferredType);
   const dur = parseFloat(document.getElementById('qa-duration').value) || 1.5;
   state.tasks.unshift({
     id: 't_' + Date.now(),
     title: t,
-    type: detectedType === 'DS' && currentQuickAddType !== 'DS' ? DEFAULT_TASK_TYPE : detectedType,
+    type: finalType,
     importance: 1.0,
     note: '',
     subject: customSelectValues['qa-subj'] || Object.keys(SUBJECTS)[0] || 'maths',
@@ -332,6 +335,7 @@ window.quickAddMission = function(e) {
   tInput.value = '';
   saveState();
   renderCahier();
+  if (typeof window.renderSettingsPanel === 'function') window.renderSettingsPanel();
   showToast('Mission ajoutée');
 };
 
@@ -540,7 +544,7 @@ function renderCahier() {
                 <div class="saas-card kanban-card" draggable="true" ondragstart="window.onKanbanDragStart(event, '${t.id}')" ondragend="window.onKanbanDragEnd(event)" style="border-left:3px solid ${s.color}; ${isDone ? 'opacity:0.5;' : ''}">
                   <div class="k-head">
                     <div class="k-head-l" style="flex-wrap:wrap;">
-                      <span class="k-handle" onpointerdown="window.kPointerDown(event, '${t.id}')"><i class="ph-bold ph-dots-six-vertical"></i></span>
+                      <span class="k-handle" onpointerdown="window.kPointerDown(event, '${t.id}')" title="Glisser">⠿</span>
                       <button type="button" class="check-touch-zone" onclick="event.stopPropagation(); window.toggleTask('${t.id}', event)" title="${isDone ? 'Marquer comme à faire' : 'Valider'}">
                         <span class="custom-check ${isDone ? 'checked' : ''}">${isDone ? '<i class="ph-bold ph-check text-xs"></i>' : ''}</span>
                       </button>

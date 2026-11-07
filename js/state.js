@@ -17,7 +17,8 @@ let state = {
     manualOrder: [],
     excludedIds: [],
     customDurations: {},
-    pinnedEveningIds: []
+    pinnedEveningIds: [],
+    naps: {}
   },
   tasks: [],
   schedule: [],
@@ -99,15 +100,25 @@ function normalizeSettingsState() {
   state.settings.dinnerEnd = state.settings.dinnerEnd || '20:00';
   state.settings.bedtime = state.settings.bedtime || '23:00';
   state.settings.defaultClassEnd = state.settings.defaultClassEnd || '17:30';
+  const buf = parseInt(state.settings.commuteBufferMin, 10);
+  state.settings.commuteBufferMin = Number.isFinite(buf) ? Math.min(120, Math.max(0, buf)) : 30;
+  const rawDeck = String(state.settings.ankiDeck || '').trim();
+  state.settings.ankiDeck = rawDeck || 'PCSI::Vocabulaire';
 
   if (!state.eveningPlan || typeof state.eveningPlan !== 'object') {
-    state.eveningPlan = { manualOrder: [], excludedIds: [], customDurations: {}, pinnedEveningIds: [] };
+    state.eveningPlan = { manualOrder: [], excludedIds: [], customDurations: {}, pinnedEveningIds: [], naps: {}, canvasAddedByDay: {} };
   }
   if (!Array.isArray(state.eveningPlan.manualOrder)) state.eveningPlan.manualOrder = [];
   if (!Array.isArray(state.eveningPlan.excludedIds)) state.eveningPlan.excludedIds = [];
   if (!Array.isArray(state.eveningPlan.pinnedEveningIds)) state.eveningPlan.pinnedEveningIds = [];
   if (!state.eveningPlan.customDurations || typeof state.eveningPlan.customDurations !== 'object') {
     state.eveningPlan.customDurations = {};
+  }
+  if (!state.eveningPlan.naps || typeof state.eveningPlan.naps !== 'object' || Array.isArray(state.eveningPlan.naps)) {
+    state.eveningPlan.naps = {};
+  }
+  if (!state.eveningPlan.canvasAddedByDay || typeof state.eveningPlan.canvasAddedByDay !== 'object' || Array.isArray(state.eveningPlan.canvasAddedByDay)) {
+    state.eveningPlan.canvasAddedByDay = {};
   }
   if (!Array.isArray(state.scheduleDocs)) {
     state.scheduleDocs = [];
@@ -124,15 +135,36 @@ function inferTaskTypeFromTitle(title) {
       return t.id;
     }
   }
+  if (TASK_TYPES.DS && /\b(ds|devoir\s+surveill[eé]|concours\s+blanc)\b/i.test(clean)) return 'DS';
   if (TASK_TYPES.TD && /^td\b/i.test(clean)) return 'TD';
   if (TASK_TYPES.DM && /^dm\b/i.test(clean)) return 'DM';
   if (TASK_TYPES.Exercice && /^(exo|exercice)s?\b/i.test(clean)) return 'Exercice';
   if (TASK_TYPES.Colle && /^(colle|kh[ôo]lle)\b/i.test(clean)) return 'Colle';
   if (TASK_TYPES.TP && /^tp\b/i.test(clean)) return 'TP';
-  if (TASK_TYPES.DS && /^ds\b/i.test(clean)) return 'DS';
   if (TASK_TYPES['Révision'] && /^r[ée]vision/i.test(clean)) return 'Révision';
   if (TASK_TYPES.Cours && /^cours\b/i.test(clean)) return 'Cours';
   return defaultType;
+}
+
+function inferSubjectFromText(text) {
+  if (!text) return null;
+  const norm = String(text).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+  for (const s of Object.values(SUBJECTS)) {
+    const sName = String(s.name || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+    const sShort = String(s.short || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+    if (sName && norm.includes(sName)) return s.id;
+    if (sShort && sShort.length >= 2 && new RegExp('\\b' + sShort.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\b', 'i').test(norm)) {
+      return s.id;
+    }
+  }
+  if (/\b(math|maths|mathematiques|algebre|analyse)\b/.test(norm) && SUBJECTS.maths) return 'maths';
+  if (/\b(physique|phys|mecanique|optique|thermo|elec)\b/.test(norm) && SUBJECTS.physique) return 'physique';
+  if (/\b(chimie|orga|atomistique)\b/.test(norm) && SUBJECTS.chimie) return 'chimie';
+  if (/\b(sii|si|ingenieur|automatique|cinematique)\b/.test(norm) && SUBJECTS.sii) return 'sii';
+  if (/\b(info|informatique|python|sql|algo)\b/.test(norm) && SUBJECTS.info) return 'info';
+  if (/\b(anglais|english|lv1)\b/.test(norm) && SUBJECTS.anglais) return 'anglais';
+  if (/\b(francais|philo|philosophie|lettres|dissertation)\b/.test(norm) && SUBJECTS.francais) return 'francais';
+  return null;
 }
 
 function buildDefaultPipelinePhases(totalDuration, phaseCount = 3) {
@@ -191,32 +223,67 @@ function getUpcomingSaturdayDsSubjects() {
 
   const today = new Date();
   today.setHours(0, 0, 0, 0);
-  const day = today.getDay();
-  const daysUntilSat = day === 6 ? 0 : (6 - day);
-  const nextSat = addDays(today, daysUntilSat);
-  const nextSatISO = formatDateISO(nextSat);
-  const weekAfterSatISO = formatDateISO(addDays(nextSat, 7));
+  const dsRegex = /\b(ds|devoir\s+surveill[eé]|concours\s+blanc|cb)\b/i;
 
-  const found = new Set();
-  if (Array.isArray(state.schedule)) {
-    state.schedule.forEach(sl => {
-      if (!sl) return;
-      const isDs = String(sl.type || '').toUpperCase() === 'DS' || /\bds\b/i.test(sl.title || '');
-      if (!isDs) return;
-      if (sl.date === nextSatISO || sl.date === weekAfterSatISO || (!sl.date && Number(sl.dayOfWeek) === 5)) {
-        if (sl.subject && SUBJECTS[sl.subject]) found.add(sl.subject);
-      }
-    });
-  }
+  const specificFound = new Set();
+
+  // 1. Chercher dans les missions actives (type DS ou titre mentionnant un DS) prévues dans les 10 prochains jours
   if (Array.isArray(state.tasks)) {
     state.tasks.forEach(t => {
       if (!t || t.completed || t.status === 'done') return;
-      if (t.type === 'DS' && (t.dueDate === nextSatISO || t.dueDate === weekAfterSatISO) && t.subject && SUBJECTS[t.subject]) {
-        found.add(t.subject);
+      const isDsTask = String(t.type || '').toUpperCase() === 'DS' || dsRegex.test(t.title || '');
+      if (!isDsTask) return;
+      let withinWindow = true;
+      if (t.dueDate) {
+        const due = new Date(t.dueDate + 'T00:00:00');
+        if (!isNaN(due.getTime())) {
+          const diffDays = Math.round((due - today) / 86400000);
+          withinWindow = diffDays >= 0 && diffDays <= 10;
+        }
+      }
+      if (withinWindow) {
+        const inferred = inferSubjectFromText(t.title || '');
+        const subj = (inferred && SUBJECTS[inferred]) ? inferred : t.subject;
+        if (subj && SUBJECTS[subj]) specificFound.add(subj);
       }
     });
   }
-  return Array.from(found);
+
+  // 2. Chercher dans les créneaux d'emploi du temps datés dans les 10 prochains jours
+  if (Array.isArray(state.schedule)) {
+    state.schedule.forEach(sl => {
+      if (!sl || !sl.date) return;
+      const isDsSlot = String(sl.type || '').toUpperCase() === 'DS' || dsRegex.test(sl.title || '');
+      if (!isDsSlot) return;
+      const slDate = new Date(sl.date + 'T00:00:00');
+      if (isNaN(slDate.getTime())) return;
+      const diffDays = Math.round((slDate - today) / 86400000);
+      if (diffDays >= 0 && diffDays <= 10) {
+        const inferred = inferSubjectFromText(sl.title || '');
+        const subj = (inferred && SUBJECTS[inferred]) ? inferred : sl.subject;
+        if (subj && SUBJECTS[subj]) specificFound.add(subj);
+      }
+    });
+  }
+
+  if (specificFound.size > 0) {
+    return Array.from(specificFound);
+  }
+
+  // 3. Repli : créneaux hebdomadaires récurrents de type DS (ex: DS du Samedi matin)
+  const recurringFound = new Set();
+  if (Array.isArray(state.schedule)) {
+    state.schedule.forEach(sl => {
+      if (!sl || sl.date) return;
+      const isDsSlot = String(sl.type || '').toUpperCase() === 'DS' || dsRegex.test(sl.title || '');
+      if (!isDsSlot) return;
+      const inferred = inferSubjectFromText(sl.title || '');
+      const subj = (inferred && SUBJECTS[inferred]) ? inferred : sl.subject;
+      if (subj && SUBJECTS[subj]) recurringFound.add(subj);
+    });
+  }
+
+  return Array.from(recurringFound);
 }
 
 function loadState() {

@@ -13,3 +13,6 @@ function showToast(msg) { const t = document.getElementById('toast'); document.g
 
 function escapeHtml(str) { if (!str) return ''; return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
 
+function uid() {
+  return Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 7);
+}

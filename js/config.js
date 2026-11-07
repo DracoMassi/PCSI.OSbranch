@@ -90,11 +90,71 @@ const DEFAULT_SETTINGS = {
   dinnerStart: '19:00',      // Début pause dîner
   dinnerEnd: '20:00',        // Fin pause dîner
   bedtime: '23:00',          // Couvre-feu / heure de coucher cible
-  defaultClassEnd: '17:30'   // Heure de début soirée par défaut si aucun cours l'après-midi
+  defaultClassEnd: '17:30',  // Heure de début soirée par défaut si aucun cours l'après-midi
+  commuteBufferMin: 30,      // Buffer trajet / transition (min) après les cours et avant une séance tardive
+  ankiDeck: 'PCSI::Vocabulaire' // Deck Anki cible (supporte Parent::Enfant)
 };
 
 const DAYS_LABELS = ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi'];
 const DAYS_SHORT = ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam'];
+const AFTER_HOURS_DAYS_LABELS = ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi', 'Dimanche'];
+const AFTER_HOURS_DAYS_SHORT = ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'];
+
+/**
+ * Détecte les jours fériés français (fixes + mobiles calculés via algorithme de Meeus/Jones/Butcher)
+ */
+function getFrenchBankHolidayName(dateObj) {
+  if (!(dateObj instanceof Date) || isNaN(dateObj.getTime())) return null;
+  const y = dateObj.getFullYear();
+  const m = dateObj.getMonth() + 1;
+  const d = dateObj.getDate();
+  const mmdd = `${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+
+  const fixed = {
+    '01-01': 'Jour de l\'An',
+    '05-01': 'Fête du Travail',
+    '05-08': 'Victoire 1945',
+    '07-14': 'Fête Nationale',
+    '08-15': 'Assomption',
+    '11-01': 'Toussaint',
+    '11-11': 'Armistice 1918',
+    '12-25': 'Noël'
+  };
+  if (fixed[mmdd]) return fixed[mmdd];
+
+  // Calcul de Pâques (algorithme de Meeus)
+  const a = y % 19;
+  const b = Math.floor(y / 100);
+  const c = y % 100;
+  const d1 = Math.floor(b / 4);
+  const e = b % 4;
+  const f = Math.floor((b + 8) / 25);
+  const g = Math.floor((b - f + 1) / 3);
+  const h = (19 * a + b - d1 - g + 15) % 30;
+  const i = Math.floor(c / 4);
+  const k = c % 4;
+  const l = (32 + 2 * e + 2 * i - h - k) % 7;
+  const m1 = Math.floor((a + 11 * h + 22 * l) / 451);
+  const easterMonth = Math.floor((h + l - 7 * m1 + 114) / 31);
+  const easterDay = ((h + l - 7 * m1 + 114) % 31) + 1;
+  const easter = new Date(y, easterMonth - 1, easterDay);
+
+  const addDays = (base, offset) => {
+    const dt = new Date(base);
+    dt.setDate(dt.getDate() + offset);
+    return dt.getMonth() + 1 === m && dt.getDate() === d;
+  };
+
+  if (addDays(easter, 1)) return 'Lundi de Pâques';
+  if (addDays(easter, 39)) return 'Ascension';
+  if (addDays(easter, 50)) return 'Lundi de Pentecôte';
+  return null;
+}
+
+function isFrenchBankHoliday(dateObj) {
+  return Boolean(getFrenchBankHolidayName(dateObj));
+}
+
 
 const DEFAULT_ERROR_TYPES = [
   { id: 'et_calc', label: 'Erreur de calcul', icon: '🔢' },

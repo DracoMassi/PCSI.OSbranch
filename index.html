@@ -51,9 +51,9 @@
           <i class="ph-bold ph-check-square-offset"></i>
           <span>Missions</span>
         </button>
-        <button type="button" id="nav-agenda" onclick="window.switchTab('agenda')" class="nav-item" title="Emploi du temps &amp; Soirée">
+        <button type="button" id="nav-agenda" onclick="window.switchTab('agenda')" class="nav-item" title="Emploi du temps &amp; After-Hours Engine">
           <i class="ph-bold ph-calendar-blank"></i>
-          <span>Agenda &amp; Soirée</span>
+          <span>Agenda &amp; After-Hours</span>
         </button>
         <button type="button" id="nav-postits" onclick="window.switchTab('postits')" class="nav-item" title="Mur d'erreurs">
           <i class="ph-bold ph-note"></i>
@@ -245,8 +245,8 @@
               <button type="button" id="agenda-tab-academic-btn" onclick="window.setAgendaSubTab('academic')" class="btn-ghost active-pill" style="padding:7px 14px; font-size:12.5px; border:none;">
                 <i class="ph-bold ph-calendar-blank"></i> Grille Académique
               </button>
-              <button type="button" id="agenda-tab-evening-btn" onclick="window.setAgendaSubTab('evening')" class="btn-ghost" style="padding:7px 14px; font-size:12.5px; border:none;">
-                <i class="ph-bold ph-moon-stars"></i> Planning Soirée (17h → Coucher)
+              <button type="button" id="agenda-tab-evening-btn" onclick="window.setAgendaSubTab('evening')" class="btn-ghost" style="padding:6px 13px; font-size:12.5px; border:none;">
+                <i class="ph-bold ph-cpu"></i> After-Hours Engine
               </button>
             </div>
           </div>
@@ -302,13 +302,17 @@
 
       <!-- TAB 5 : SITES & RÉGLAGES -->
       <section id="tab-sites" class="tab-view" style="display:none;">
-        <div class="v3-settings-bento-head">
-          <div>
-            <div class="section-label" style="margin:0 0 4px 0;">Portails &amp; Ressources</div>
-            <p style="font-size:12.5px; color:var(--text-muted);">Accès direct à vos plateformes CPGE, cahiers de prépa et banques de concours</p>
-          </div>
-          <button type="button" onclick="window.openPortalModal(null)" class="btn-primary" style="padding:7px 14px; font-size:12.5px;">
-            <i class="ph-bold ph-plus"></i> Ajouter un portail
+        
+        <div style="text-align:center; margin-bottom:18px;">
+          <div class="section-label" style="margin:0 0 4px 0; font-size:12px; letter-spacing:0.08em; color:#38BDF8;">Paramètres du Cockpit &amp; Personnalisation</div>
+          <p style="font-size:12px; color:var(--text-muted);">Configure ton moteur de tension, l'After-Hours Engine, le détecteur Auto-DS et AnkiConnect</p>
+        </div>
+        <div id="settings-panel-mount" style="margin-bottom:32px;"></div>
+
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+          <div class="section-label" style="margin:0;">Portails CPGE</div>
+          <button type="button" onclick="window.openPortalModal(null)" class="btn-primary" style="padding:6px 12px; font-size:12px;">
+            <i class="ph-bold ph-plus"></i> Ajouter un lien
           </button>
         </div>
 

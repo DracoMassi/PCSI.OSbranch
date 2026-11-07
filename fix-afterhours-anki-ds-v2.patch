@@ -1,0 +1,1421 @@
+diff --git a/css/components.css b/css/components.css
+index 28b4d8c..2350745 100644
+--- a/css/components.css
++++ b/css/components.css
+@@ -442,6 +442,46 @@ select.saas-input option {
+   padding: 6px 11px;
+   border-radius: 9px;
+   border: 1px solid var(--border-subtle);
++  position: relative;
++}
++.evening-stat-pill-dropdown:has(.custom-select.open) {
++  z-index: 90;
++  border-color: rgba(52, 211, 153, 0.45);
++}
++.evening-inline-select {
++  width: auto !important;
++  display: inline-block;
++}
++.evening-inline-select-trigger {
++  padding: 3px 9px !important;
++  min-height: 26px !important;
++  border-radius: 7px !important;
++  font-size: 11.5px !important;
++  font-weight: 700 !important;
++  color: #34D399 !important;
++  background: rgba(16, 185, 129, 0.1) !important;
++  border: 1px solid rgba(16, 185, 129, 0.32) !important;
++  gap: 6px !important;
++}
++.evening-inline-select-trigger:hover {
++  background: rgba(16, 185, 129, 0.18) !important;
++  border-color: rgba(16, 185, 129, 0.55) !important;
++}
++.evening-inline-select-menu {
++  min-width: 175px !important;
++  left: 0;
++  right: auto;
++  top: calc(100% + 7px) !important;
++  background: rgba(16, 19, 28, 0.96) !important;
++  backdrop-filter: blur(20px) saturate(160%) !important;
++  -webkit-backdrop-filter: blur(20px) saturate(160%) !important;
++  border: 1px solid rgba(52, 211, 153, 0.32) !important;
++  border-radius: 11px !important;
++  padding: 5px !important;
++  box-shadow: 0 16px 36px rgba(0, 0, 0, 0.7) !important;
++}
++#calendar-grid-box.evening-mode-active {
++  overflow: visible !important;
+ }
+ .evening-time-mini {
+   background: rgba(255, 255, 255, 0.04);
+@@ -760,17 +800,27 @@ select.saas-input option {
+   border: 1px solid var(--border-subtle);
+ }
+ 
+-/* Settings & Subject Management Styles */
++/* Settings & Subject Management Styles (Centered & Framed Cockpit Layout) */
++#tab-sites {
++  max-width: 1120px;
++  margin: 0 auto;
++  width: 100%;
++}
+ .settings-grid {
+   display: grid;
+-  grid-template-columns: repeat(auto-fit, minmax(360px, 1fr));
+-  gap: 16px;
++  grid-template-columns: repeat(2, minmax(0, 1fr));
++  gap: 18px;
++  max-width: 1120px;
++  margin: 0 auto;
++  align-items: stretch;
+ }
+ .settings-card {
+-  padding: 20px 22px;
++  padding: 22px 24px;
+   display: flex;
+   flex-direction: column;
+-  gap: 14px;
++  justify-content: space-between;
++  gap: 15px;
++  height: 100%;
+ }
+ .settings-card-head {
+   display: flex;
+diff --git a/index.html b/index.html
+index c7f6096..8563014 100644
+--- a/index.html
++++ b/index.html
+@@ -277,8 +277,11 @@
+       <!-- TAB 5 : SITES & RÉGLAGES -->
+       <section id="tab-sites" class="tab-view" style="display:none;">
+         
+-        <div class="section-label" style="margin-bottom:12px;">Paramètres du Cockpit &amp; Personnalisation</div>
+-        <div id="settings-panel-mount" style="margin-bottom:28px;"></div>
++        <div style="text-align:center; margin-bottom:18px;">
++          <div class="section-label" style="margin:0 0 4px 0; font-size:12px; letter-spacing:0.08em; color:#38BDF8;">Paramètres du Cockpit &amp; Personnalisation</div>
++          <p style="font-size:12px; color:var(--text-muted);">Configure ton moteur de tension, l'After-Hours Engine, le détecteur Auto-DS et AnkiConnect</p>
++        </div>
++        <div id="settings-panel-mount" style="margin-bottom:32px;"></div>
+ 
+         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+           <div class="section-label" style="margin:0;">Portails CPGE</div>
+diff --git a/js/agenda.js b/js/agenda.js
+index ea94513..20e83e5 100644
+--- a/js/agenda.js
++++ b/js/agenda.js
+@@ -108,7 +108,7 @@ function getDayScheduleSlots(dateObj, dayIdx) {
+ }
+ 
+ /**
+- * Détecte si la journée est un week-end sans cours ou un jour férié (Blank Canvas)
++ * Détecte si la journée est sans cours obligatoire (Vacances, Week-end sans cours ou Jour férié -> Blank Canvas)
+  */
+ function getDayCanvasStatus(dateObj, dayIdx, slots) {
+   const holidayName = typeof getFrenchBankHolidayName === 'function' ? getFrenchBankHolidayName(dateObj) : null;
+@@ -116,14 +116,17 @@ function getDayCanvasStatus(dateObj, dayIdx, slots) {
+   const isSaturday = dayIdx === 5 || dateObj.getDay() === 6;
+   const hasMandatoryCourses = Array.isArray(slots) && slots.length > 0;
+ 
+-  if (holidayName && !hasMandatoryCourses) {
+-    return { isBlankCanvas: true, reason: `Jour férié (${holidayName})`, badge: 'JOUR FÉRIÉ · BLANK CANVAS' };
+-  }
+-  if (isSunday && !hasMandatoryCourses) {
+-    return { isBlankCanvas: true, reason: 'Dimanche (Aucun cours obligatoire)', badge: 'WEEK-END · BLANK CANVAS' };
+-  }
+-  if (isSaturday && !hasMandatoryCourses) {
+-    return { isBlankCanvas: true, reason: 'Samedi libre (Aucun cours)', badge: 'WEEK-END · BLANK CANVAS' };
++  if (!hasMandatoryCourses) {
++    if (holidayName) {
++      return { isBlankCanvas: true, reason: `Jour férié (${holidayName}) — Planning vierge`, badge: 'JOUR FÉRIÉ · PLANNING VIERGE' };
++    }
++    if (isSunday) {
++      return { isBlankCanvas: true, reason: 'Dimanche — Planning vierge à remplir soi-même', badge: 'WEEK-END · PLANNING VIERGE' };
++    }
++    if (isSaturday) {
++      return { isBlankCanvas: true, reason: 'Samedi sans cours — Planning vierge à remplir soi-même', badge: 'WEEK-END · PLANNING VIERGE' };
++    }
++    return { isBlankCanvas: true, reason: 'Vacances / Journée sans cours — Planning vierge à remplir soi-même', badge: 'VACANCES / LIBRE · PLANNING VIERGE' };
+   }
+   return { isBlankCanvas: false, reason: null, badge: null };
+ }
+@@ -131,8 +134,8 @@ function getDayCanvasStatus(dateObj, dayIdx, slots) {
+ /**
+  * Feature 1: Dynamic Gap Calculation (After-Hours Engine)
+  * Analyse l'emploi du temps du jour pour détecter :
+- * - Les fins de cours anticipées vs séances tardives (ex: fin des cours à 15:30, colle à 19:00 -> ouvre 16:00-18:30 avec buffer de 30m)
+- * - Les jours Blank Canvas (week-ends / jours fériés sans cours)
++ * - Les fins de cours anticipées vs séances tardives (ex: fin des cours à 15:30, colle à 19:00 -> ouvre 16:00-18:30 avec pause après cours de 30m)
++ * - Les jours Blank Canvas (vacances / week-ends / jours fériés où l'emploi du temps est vide : laissés vierges par défaut)
+  * - La fenêtre de dîner et la limite de coucher (bedtime)
+  */
+ function computeAfterHoursEnvelope(dateObj, dayIdx) {
+@@ -155,20 +158,20 @@ function computeAfterHoursEnvelope(dateObj, dayIdx) {
+     type: sl.type || 'Cours'
+   })).sort((a, b) => a.start - b.start || a.end - b.end);
+ 
+-  // Cas 1 : Week-end ou Jour Férié (Blank Canvas : aucun cours obligatoire en journée)
++  // Cas 1 : Emploi du temps vide (Vacances, Week-end sans cours ou Jour Férié -> Blank Canvas laissé vierge par défaut)
+   if (canvasStatus.isBlankCanvas) {
+     const canvasStart = 9 * 60; // 09:00
+     const lunchStart = 12 * 60 + 30; // 12:30
+     const lunchEnd = 13 * 60 + 30;   // 13:30
+     const windows = [];
+     if (canvasStart < lunchStart) {
+-      windows.push({ start: canvasStart, end: Math.min(lunchStart, dinnerStartMin), label: 'Session Matin (Blank Canvas)' });
++      windows.push({ start: canvasStart, end: Math.min(lunchStart, dinnerStartMin), label: 'Matinée libre' });
+     }
+     if (lunchEnd < dinnerStartMin) {
+-      windows.push({ start: lunchEnd, end: Math.min(dinnerStartMin, bedtimeMin), label: 'Session Après-midi' });
++      windows.push({ start: lunchEnd, end: Math.min(dinnerStartMin, bedtimeMin), label: 'Après-midi libre' });
+     }
+     if (dinnerEndMin < bedtimeMin) {
+-      windows.push({ start: dinnerEndMin, end: bedtimeMin, label: 'Session Soirée' });
++      windows.push({ start: dinnerEndMin, end: bedtimeMin, label: 'Soirée libre' });
+     }
+     return {
+       isBlankCanvas: true,
+@@ -182,33 +185,6 @@ function computeAfterHoursEnvelope(dateObj, dayIdx) {
+       windows,
+       lateAcademicSlots: [],
+       lastDaytimeSlot: null,
+-      lunchBreak: { startMin: lunchStart, endMin: lunchEnd }
+-    };
+-  }
+-
+-  // Cas 2 : Journée de semaine sans créneau renseigné dans l'agenda
+-  if (sortedSlots.length === 0) {
+-    const effectiveStart = Math.min(defaultClassEndMin, bedtimeMin);
+-    const windows = [];
+-    if (effectiveStart < dinnerStartMin) {
+-      windows.push({ start: effectiveStart, end: Math.min(dinnerStartMin, bedtimeMin), label: 'Avant dîner' });
+-    }
+-    const postDinner = Math.max(effectiveStart, dinnerEndMin);
+-    if (postDinner < bedtimeMin) {
+-      windows.push({ start: postDinner, end: bedtimeMin, label: 'Après dîner' });
+-    }
+-    return {
+-      isBlankCanvas: false,
+-      canvasReason: null,
+-      canvasBadge: null,
+-      bufferMin,
+-      startMin: effectiveStart,
+-      dinnerStartMin,
+-      dinnerEndMin,
+-      bedtimeMin,
+-      windows,
+-      lateAcademicSlots: [],
+-      lastDaytimeSlot: null,
+       lunchBreak: null
+     };
+   }
+@@ -550,12 +526,18 @@ function buildEveningScheduleModel(dateObj, dayIdx) {
+ 
+   const baseStudyCapacityMin = windows.reduce((acc, w) => acc + Math.max(0, w.end - w.start), 0);
+   const excludedSet = new Set((state.eveningPlan && state.eveningPlan.excludedIds) || []);
++  const canvasAddedByDay = (state.eveningPlan && state.eveningPlan.canvasAddedByDay && typeof state.eveningPlan.canvasAddedByDay === 'object')
++    ? state.eveningPlan.canvasAddedByDay
++    : {};
++  const canvasAddedSet = new Set(Array.isArray(canvasAddedByDay[dayISO]) ? canvasAddedByDay[dayISO] : []);
+   const orderedCandidates = getOrderedEveningCandidates(dayISO);
+   const dayNaps = getDayNaps(dayISO);
+   const totalNapMin = dayNaps.reduce((acc, n) => acc + (parseInt(n.durationMin, 10) || 20), 0);
+ 
+   // Étape 1 : Sélectionner les missions qui rentrent dans l'enveloppe d'étude (AVANT l'impact des siestes,
+   // afin qu'insérer une sieste décale dynamiquement les blocs suivants SANS JAMAIS supprimer de mission !)
++  // Sur un jour Blank Canvas (vacances, week-end, férié, emploi du temps vide), ne PAS pré-remplir :
++  // seules les missions explicitement ajoutées par l'utilisateur (canvasAddedSet) sont placées sur la timeline.
+   const selectedTasks = [];
+   const overflowTasks = [];
+   const allocatedTaskIds = new Set();
+@@ -563,6 +545,19 @@ function buildEveningScheduleModel(dateObj, dayIdx) {
+   let bedtimeOverflowMin = 0;
+ 
+   orderedCandidates.forEach(task => {
++    if (env.isBlankCanvas && !canvasAddedSet.has(task.id) && task.completedInEveningDate !== dayISO) {
++      if (!isTaskCompleted(task)) {
++        overflowTasks.push({
++          task,
++          reason: 'Planning vierge — Glisser ⠿ ou cliquer « + Ajouter »',
++          neededMin: Math.round(getTaskEveningDurationHours(task) * 60),
++          isManualDefer: false,
++          isBlankCanvasPool: true
++        });
++      }
++      return;
++    }
++
+     if (excludedSet.has(task.id)) {
+       if (!isTaskCompleted(task)) {
+         overflowTasks.push({ task, reason: 'Reporté manuellement', neededMin: Math.round(getTaskEveningDurationHours(task) * 60), isManualDefer: true });
+@@ -589,7 +584,7 @@ function buildEveningScheduleModel(dateObj, dayIdx) {
+ 
+   // Étape 2 : Ordonner la séquence unifiée [Siestes + Missions sélectionnées] selon manualOrder
+   // Par défaut, une nouvelle sieste se place en tête ou à la position choisie par glisser-déposer,
+-  // ce qui décale dynamiquement toutes les missions situées après elle.
++  // ce qui décale dynamiquement toutes les missions situées après elle de +20m / +30m / +45m.
+   const manual = (state.eveningPlan && Array.isArray(state.eveningPlan.manualOrder)) ? state.eveningPlan.manualOrder : [];
+   const timelineSequence = [];
+   const napMap = new Map(dayNaps.map(n => [n.id, n]));
+@@ -622,8 +617,8 @@ function buildEveningScheduleModel(dateObj, dayIdx) {
+   });
+ 
+   // Étape 3 : Allouer les créneaux horaires dans les fenêtres actives
+-  // Si les siestes poussent la dernière tâche au-delà de bedtimeMin, on étend la dernière fenêtre de totalNapMin
+-  // pour que les tâches soient décalées (shifted) sans jamais être supprimées.
++  // Si les siestes poussent les tâches au-delà d'une fenêtre ou de bedtimeMin, on étend la dernière fenêtre de totalNapMin
++  // pour que toutes les tâches suivantes soient repoussées de la durée de la sieste sans jamais être supprimées.
+   const winCursors = windows.map((w, idx) => ({
+     start: w.start,
+     cursor: w.start,
+@@ -633,11 +628,13 @@ function buildEveningScheduleModel(dateObj, dayIdx) {
+   }));
+ 
+   const scheduledBlocks = [];
++  let cumulativeNapShiftMin = 0;
+ 
+   timelineSequence.forEach(entry => {
+     if (entry.itemType === 'nap') {
+       const nap = entry.nap;
+       const napDur = Math.max(10, parseInt(nap.durationMin, 10) || 20);
++      cumulativeNapShiftMin += napDur;
+       let left = napDur;
+       for (let i = 0; i < winCursors.length && left > 0; i++) {
+         const w = winCursors[i];
+@@ -687,57 +684,59 @@ function buildEveningScheduleModel(dateObj, dayIdx) {
+         durationMin: seg.durationMin,
+         partIndex: totalParts > 1 ? partIndex++ : null,
+         totalParts: totalParts > 1 ? totalParts : null,
++        shiftedByNapMin: cumulativeNapShiftMin,
+         shiftedPastBedtime: seg.end > bedtimeMin
+       });
+     });
+   });
+ 
+   const timelineEvents = [...scheduledBlocks];
++  const isCompletelyEmptyBlankCanvas = env.isBlankCanvas && selectedTasks.length === 0 && dayNaps.length === 0;
+ 
+-  // Ajouter les créneaux libres restants dans la limite du couvre-feu de base
+-  winCursors.forEach(w => {
+-    const freeEnd = Math.min(w.baseEnd, w.end);
+-    if (freeEnd - w.cursor >= 15) {
+-      timelineEvents.push({
+-        kind: 'free',
+-        startMin: w.cursor,
+-        endMin: freeEnd,
+-        durationMin: freeEnd - w.cursor
++  if (isCompletelyEmptyBlankCanvas) {
++    // Journée sans cours (Vacances, Week-end, Férié) et aucune tâche ajoutée : laisser le planning 100% vierge !
++    timelineEvents.push({
++      kind: 'blank_canvas_empty',
++      startMin: effectiveStartMin,
++      endMin: bedtimeMin,
++      durationMin: Math.max(0, bedtimeMin - effectiveStartMin)
++    });
++  } else {
++    // Ajouter les créneaux libres restants dans la limite du couvre-feu de base
++    winCursors.forEach(w => {
++      const freeEnd = Math.min(w.baseEnd, w.end);
++      if (freeEnd - w.cursor >= 15) {
++        timelineEvents.push({
++          kind: 'free',
++          startMin: w.cursor,
++          endMin: freeEnd,
++          durationMin: freeEnd - w.cursor
++        });
++      }
++    });
++
++    // Ajouter les séances académiques tardives (ex: Colle 19:00-20:00) pour visualiser pourquoi la fenêtre pré-colle s'est arrêtée à 18:30
++    if (Array.isArray(env.lateAcademicSlots)) {
++      env.lateAcademicSlots.forEach(ls => {
++        timelineEvents.push({
++          kind: 'academic_late',
++          slot: ls,
++          startMin: ls.start,
++          endMin: ls.end,
++          durationMin: ls.end - ls.start,
++          bufferMin: env.bufferMin
++        });
+       });
+     }
+-  });
+ 
+-  // Ajouter les séances académiques tardives (ex: Colle 19:00-20:00) pour visualiser pourquoi la fenêtre pré-colle s'est arrêtée à 18:30
+-  if (Array.isArray(env.lateAcademicSlots)) {
+-    env.lateAcademicSlots.forEach(ls => {
++    if (dinnerStartMin < bedtimeMin && dinnerEndMin > effectiveStartMin) {
+       timelineEvents.push({
+-        kind: 'academic_late',
+-        slot: ls,
+-        startMin: ls.start,
+-        endMin: ls.end,
+-        durationMin: ls.end - ls.start,
+-        bufferMin: env.bufferMin
++        kind: 'dinner',
++        startMin: dinnerStartMin,
++        endMin: dinnerEndMin,
++        durationMin: dinnerEndMin - dinnerStartMin
+       });
+-    });
+-  }
+-
+-  // Ajouter la pause déjeuner en mode Blank Canvas (Week-end / Férié)
+-  if (env.lunchBreak) {
+-    timelineEvents.push({
+-      kind: 'lunch',
+-      startMin: env.lunchBreak.startMin,
+-      endMin: env.lunchBreak.endMin,
+-      durationMin: env.lunchBreak.endMin - env.lunchBreak.startMin
+-    });
+-  }
+-
+-  if (dinnerStartMin < bedtimeMin && dinnerEndMin > effectiveStartMin) {
+-    timelineEvents.push({
+-      kind: 'dinner',
+-      startMin: dinnerStartMin,
+-      endMin: dinnerEndMin,
+-      durationMin: dinnerEndMin - dinnerStartMin
+-    });
++    }
+   }
+ 
+   timelineEvents.sort((a, b) => a.startMin - b.startMin || a.endMin - b.endMin);
+@@ -771,7 +770,10 @@ function formatDurationHM(totalMinutes) {
+ 
+ function ensureEveningManualOrderInitialized(dayISO = null) {
+   const targetISO = dayISO || getEveningSelectedDayISO();
+-  if (!state.eveningPlan) state.eveningPlan = { manualOrder: [], excludedIds: [], customDurations: {}, pinnedEveningIds: [], naps: {} };
++  if (!state.eveningPlan) state.eveningPlan = { manualOrder: [], excludedIds: [], customDurations: {}, pinnedEveningIds: [], naps: {}, canvasAddedByDay: {} };
++  if (!state.eveningPlan.canvasAddedByDay || typeof state.eveningPlan.canvasAddedByDay !== 'object') {
++    state.eveningPlan.canvasAddedByDay = {};
++  }
+   const existingNaps = getDayNaps(targetISO).map(n => n.id);
+   const candidates = getOrderedEveningCandidates(targetISO).map(t => t.id);
+   // Conserver les positions existantes des siestes dans manualOrder
+@@ -793,10 +795,13 @@ function ensureEveningManualOrderInitialized(dayISO = null) {
+ 
+ /**
+  * Feature 1.3 : Power Nap / Pause Trigger (+ Poser une sieste : 20m, 30m, 45m)
+- * Insère une sieste dans l'After-Hours Engine et décale dynamiquement les blocs de tâches suivants sans les supprimer.
++ * Insère une sieste dans l'After-Hours Engine et repousse dynamiquement toutes les tâches suivantes de 20/30/45 min sans les supprimer.
+  */
+ window.addEveningNap = function(durationMin = 20, event = null) {
+-  if (event) event.stopPropagation();
++  if (event) {
++    event.stopPropagation();
++    event.preventDefault();
++  }
+   const dur = [20, 30, 45].includes(Number(durationMin)) ? Number(durationMin) : 20;
+   const dayISO = getEveningSelectedDayISO();
+   ensureEveningManualOrderInitialized(dayISO);
+@@ -806,14 +811,19 @@ window.addEveningNap = function(durationMin = 20, event = null) {
+   if (!Array.isArray(state.eveningPlan.naps[dayISO])) {
+     state.eveningPlan.naps[dayISO] = [];
+   }
+-  const napId = 'nap_' + uid();
++  const napGenId = (typeof uid === 'function')
++    ? uid()
++    : (Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 7));
++  const napId = 'nap_' + napGenId;
+   state.eveningPlan.naps[dayISO].push({
+     id: napId,
+     durationMin: dur,
+     label: `Power Nap (${dur}m)`
+   });
+-  // Insérer la sieste au début des tâches non terminées (ou en tête de soirée) pour décaler les blocs suivants
++
++  // Insérer la sieste juste avant la première tâche non terminée (ou en tête de soirée) pour repousser toutes les tâches suivantes de +dur min
+   const firstActiveTaskIdx = state.eveningPlan.manualOrder.findIndex(id => {
++    if (String(id).startsWith('nap_')) return false;
+     const t = state.tasks.find(x => x.id === id);
+     return t && !isTaskCompleted(t);
+   });
+@@ -824,7 +834,7 @@ window.addEveningNap = function(durationMin = 20, event = null) {
+   }
+   saveState();
+   renderAgenda();
+-  showToast(`Sieste de ${dur} min posée — créneaux suivants décalés (+${dur}m)`);
++  showToast(`Sieste de ${dur} min ajoutée — toutes les tâches sont repoussées de +${dur} min`);
+ };
+ 
+ window.removeEveningNap = function(napId, dayISO = null, event = null) {
+@@ -838,7 +848,7 @@ window.removeEveningNap = function(napId, dayISO = null, event = null) {
+   }
+   saveState();
+   renderAgenda();
+-  showToast('Sieste retirée — planning réajusté');
++  showToast('Sieste retirée — horaires des tâches réajustés');
+ };
+ 
+ window.moveEveningTaskOrder = function(taskId, delta, event) {
+@@ -856,32 +866,56 @@ window.moveEveningTaskOrder = function(taskId, delta, event) {
+   renderAgenda();
+ };
+ 
++function markTaskAddedOnCanvasDay(taskId, dayISO) {
++  if (!taskId || String(taskId).startsWith('nap_')) return;
++  if (!state.eveningPlan.canvasAddedByDay || typeof state.eveningPlan.canvasAddedByDay !== 'object') {
++    state.eveningPlan.canvasAddedByDay = {};
++  }
++  if (!Array.isArray(state.eveningPlan.canvasAddedByDay[dayISO])) {
++    state.eveningPlan.canvasAddedByDay[dayISO] = [];
++  }
++  if (!state.eveningPlan.canvasAddedByDay[dayISO].includes(taskId)) {
++    state.eveningPlan.canvasAddedByDay[dayISO].push(taskId);
++  }
++}
++
++function unmarkTaskAddedOnCanvasDay(taskId, dayISO) {
++  if (!taskId || !state.eveningPlan || !state.eveningPlan.canvasAddedByDay) return;
++  if (Array.isArray(state.eveningPlan.canvasAddedByDay[dayISO])) {
++    state.eveningPlan.canvasAddedByDay[dayISO] = state.eveningPlan.canvasAddedByDay[dayISO].filter(id => id !== taskId);
++  }
++}
++
+ window.prioritizeTaskTonight = function(taskId, event) {
+   if (event) event.stopPropagation();
+-  ensureEveningManualOrderInitialized();
++  const dayISO = getEveningSelectedDayISO();
++  ensureEveningManualOrderInitialized(dayISO);
+   state.eveningPlan.excludedIds = (state.eveningPlan.excludedIds || []).filter(id => id !== taskId);
++  markTaskAddedOnCanvasDay(taskId, dayISO);
+   state.eveningPlan.manualOrder = [taskId, ...state.eveningPlan.manualOrder.filter(id => id !== taskId)];
+   saveState();
+   renderAgenda();
+-  showToast('Mission placée en tête de l\'After-Hours Engine');
++  showToast('Mission ajoutée au planning After-Hours');
+ };
+ 
+ window.deferTaskToOverflow = function(taskId, event) {
+   if (event) event.stopPropagation();
+-  ensureEveningManualOrderInitialized();
++  const dayISO = getEveningSelectedDayISO();
++  ensureEveningManualOrderInitialized(dayISO);
++  unmarkTaskAddedOnCanvasDay(taskId, dayISO);
+   if (!state.eveningPlan.excludedIds.includes(taskId)) {
+     state.eveningPlan.excludedIds.push(taskId);
+   }
+   saveState();
+   renderAgenda();
+-  showToast('Mission basculée dans À reporter');
++  showToast('Mission retirée de la timeline');
+ };
+ 
+ window.adjustEveningTaskDuration = function(taskId, deltaHours, event) {
+   if (event) event.stopPropagation();
+   const task = state.tasks.find(t => t.id === taskId);
+   if (!task) return;
+-  if (!state.eveningPlan) state.eveningPlan = { manualOrder: [], excludedIds: [], customDurations: {}, pinnedEveningIds: [], naps: {} };
++  if (!state.eveningPlan) state.eveningPlan = { manualOrder: [], excludedIds: [], customDurations: {}, pinnedEveningIds: [], naps: {}, canvasAddedByDay: {} };
+   if (!state.eveningPlan.customDurations) state.eveningPlan.customDurations = {};
+   const current = getTaskEveningDurationHours(task);
+   const next = Math.max(0.25, Math.min(6, Number((current + deltaHours).toFixed(2))));
+@@ -892,15 +926,25 @@ window.adjustEveningTaskDuration = function(taskId, deltaHours, event) {
+ };
+ 
+ window.resetEveningAllocation = function() {
++  const dayISO = getEveningSelectedDayISO();
+   const existingNaps = (state.eveningPlan && state.eveningPlan.naps) ? state.eveningPlan.naps : {};
+-  state.eveningPlan = { manualOrder: [], excludedIds: [], customDurations: {}, pinnedEveningIds: [], naps: existingNaps };
++  const existingCanvasByDay = (state.eveningPlan && state.eveningPlan.canvasAddedByDay) ? state.eveningPlan.canvasAddedByDay : {};
++  if (existingCanvasByDay[dayISO]) delete existingCanvasByDay[dayISO];
++  if (existingNaps[dayISO]) delete existingNaps[dayISO];
++  state.eveningPlan = { manualOrder: [], excludedIds: [], customDurations: {}, pinnedEveningIds: [], naps: existingNaps, canvasAddedByDay: existingCanvasByDay };
+   state.tasks.forEach(t => {
+     delete t.completedInEveningDate;
+     delete t.eveningAllocatedHours;
+   });
+   saveState();
+   renderAgenda();
+-  showToast('After-Hours Engine recalculé (Tension + Flux Cours → TD → DM)');
++  showToast('After-Hours Engine réinitialisé');
++};
++
++window.selectEveningBuffer = function(minutesVal, event) {
++  if (event) event.stopPropagation();
++  document.querySelectorAll('.custom-select.open').forEach(el => el.classList.remove('open'));
++  window.updateEveningRhythmQuick('commuteBufferMin', minutesVal);
+ };
+ 
+ window.updateEveningRhythmQuick = function(field, value) {
+@@ -928,6 +972,7 @@ window.toggleTaskFromEvening = function(taskId, dayISO, event) {
+ 
+   const targetISO = dayISO || getEveningSelectedDayISO();
+   ensureEveningManualOrderInitialized(targetISO);
++  markTaskAddedOnCanvasDay(taskId, targetISO);
+   if (!state.eveningPlan.pinnedEveningIds) state.eveningPlan.pinnedEveningIds = [];
+   if (!state.eveningPlan.pinnedEveningIds.includes(taskId)) {
+     state.eveningPlan.pinnedEveningIds.push(taskId);
+@@ -979,8 +1024,10 @@ window.onEveningDropOnTask = function(e, targetItemId) {
+   draggedEveningTaskId = null;
+   if (!srcId || srcId === targetItemId) return;
+ 
+-  ensureEveningManualOrderInitialized();
++  const dayISO = getEveningSelectedDayISO();
++  ensureEveningManualOrderInitialized(dayISO);
+   state.eveningPlan.excludedIds = (state.eveningPlan.excludedIds || []).filter(id => id !== srcId);
++  markTaskAddedOnCanvasDay(srcId, dayISO);
+   const arr = state.eveningPlan.manualOrder.filter(id => id !== srcId);
+   const targetIdx = arr.indexOf(targetItemId);
+   if (targetIdx === -1) arr.unshift(srcId);
+@@ -1093,15 +1140,25 @@ function renderEveningPlanner(weekDates) {
+     </div>
+   `;
+ 
+-  // Résumé intelligent de l'ouverture de fenêtre (ex: Fin des cours 15:30 + 30m buffer -> 16:00 | Colle à 19:00 -> fenêtre 16:00-18:30)
++  // Résumé intelligent de l'ouverture de fenêtre (ex: Fin des cours 15:30 + 30m pause -> 16:00 | Colle à 19:00 -> fenêtre 16:00-18:30)
+   const startContextHtml = env.isBlankCanvas
+-    ? `<span style="color:#34D399; font-weight:700;"><i class="ph-bold ph-sun-horizon"></i> ${escapeHtml(env.canvasBadge)}</span> <small class="hide-mobile" style="color:var(--text-subtle);">(${escapeHtml(env.canvasReason)} · 09:00 → ${minToTime(model.bedtimeMin)})</small>`
+-    : `<span><span class="rhythm-lbl">Ouverture :</span> <strong class="mono">${minToTime(model.startMin)}</strong>${env.lastDaytimeSlot ? ` <small class="hide-mobile" style="color:var(--text-subtle);">(Fin ${minToTime(env.rawClassEndMin)} + ${env.bufferMin}m trajet)</small>` : ''}</span>`;
++    ? `<span style="color:#34D399; font-weight:700;"><i class="ph-bold ph-sun-horizon"></i> ${escapeHtml(env.canvasBadge)}</span> <small class="hide-mobile" style="color:var(--text-subtle);">(${escapeHtml(env.canvasReason)})</small>`
++    : `<span><span class="rhythm-lbl">Début révisions :</span> <strong class="mono">${minToTime(model.startMin)}</strong>${env.lastDaytimeSlot ? ` <small class="hide-mobile" style="color:var(--text-subtle);">(Fin cours ${minToTime(env.rawClassEndMin)} + ${env.bufferMin}m pause)</small>` : ''}</span>`;
+ 
+   const windowsSummaryBadges = env.windows.map(w =>
+     `<span class="mono" style="font-size:10.5px; padding:2px 7px; border-radius:6px; background:rgba(56,189,248,0.12); border:1px solid rgba(56,189,248,0.3); color:#38BDF8;">${minToTime(w.start)} → ${minToTime(w.end)}</span>`
+   ).join(' ');
+ 
++  const bufferOptions = [
++    { val: 0, label: '0 min (Direct)', short: '0 min' },
++    { val: 15, label: '15 min', short: '15 min' },
++    { val: 20, label: '20 min', short: '20 min' },
++    { val: 30, label: '30 min (Conseillé)', short: '30 min' },
++    { val: 45, label: '45 min', short: '45 min' },
++    { val: 60, label: '1h00 (60 min)', short: '1h00' }
++  ];
++  const currentBufObj = bufferOptions.find(o => o.val === Number(env.bufferMin)) || { val: Number(env.bufferMin) || 30, label: `${env.bufferMin} min`, short: `${env.bufferMin} min` };
++
+   const rhythmBarHtml = `
+     <div class="evening-rhythm-bar">
+       <div class="evening-rhythm-pills">
+@@ -1109,12 +1166,26 @@ function renderEveningPlanner(weekDates) {
+           <i class="ph-bold ph-lightning" style="color:#38BDF8;"></i>
+           ${startContextHtml}
+         </div>
+-        <div class="evening-stat-pill" title="Buffer de trajet / transition après les cours et avant une colle tardive">
++        <div class="evening-stat-pill evening-stat-pill-dropdown" title="Temps de pause ou de trajet entre la fin des cours et le début des révisions">
+           <i class="ph-bold ph-person-simple-walk" style="color:#34D399;"></i>
+-          <span class="rhythm-lbl">Buffer :</span>
+-          <select onchange="window.updateEveningRhythmQuick('commuteBufferMin', this.value)" class="evening-time-mini mono" style="cursor:pointer;">
+-            ${[0, 15, 20, 30, 45, 60].map(v => `<option value="${v}" ${Number(env.bufferMin) === v ? 'selected' : ''}>${v}m</option>`).join('')}
+-          </select>
++          <span class="rhythm-lbl">Pause après cours :</span>
++          <div class="custom-select evening-inline-select" id="cs-afterhours-buffer">
++            <button type="button" class="custom-select-trigger evening-inline-select-trigger mono" onclick="window.toggleCustomSelect('afterhours-buffer', event)">
++              <span>${escapeHtml(currentBufObj.short)}</span>
++              <i class="ph-bold ph-caret-down" style="font-size:10px; color:#34D399;"></i>
++            </button>
++            <div class="custom-select-menu evening-inline-select-menu">
++              ${bufferOptions.map(opt => {
++                const isSel = Number(env.bufferMin) === opt.val;
++                return `
++                  <div class="custom-select-option ${isSel ? 'selected' : ''}" onclick="window.selectEveningBuffer(${opt.val}, event)">
++                    <span class="mono" style="font-size:12px;">${escapeHtml(opt.label)}</span>
++                    ${isSel ? '<i class="ph-bold ph-check" style="font-size:11px; color:#34D399;"></i>' : ''}
++                  </div>
++                `;
++              }).join('')}
++            </div>
++          </div>
+         </div>
+         <div class="evening-stat-pill">
+           <i class="ph-bold ph-fork-knife" style="color:#F59E0B;"></i>
+@@ -1136,33 +1207,29 @@ function renderEveningPlanner(weekDates) {
+           <button type="button" onclick="window.addEveningNap(30, event)" class="btn-ghost evening-ctrl-btn mono" style="padding:3px 7px; font-size:11px; color:#34D399; border-color:rgba(16,185,129,0.3);">30m</button>
+           <button type="button" onclick="window.addEveningNap(45, event)" class="btn-ghost evening-ctrl-btn mono" style="padding:3px 7px; font-size:11px; color:#34D399; border-color:rgba(16,185,129,0.3);">45m</button>
+         </div>
+-        <button type="button" onclick="window.resetEveningAllocation()" class="btn-ghost evening-regen-btn" title="Recalculer l'After-Hours Engine (Tension + Flux Cours → TD → DM)">
+-          <i class="ph-bold ph-arrows-clockwise"></i> <span>Optimiser</span>
++        <button type="button" onclick="window.resetEveningAllocation()" class="btn-ghost evening-regen-btn" title="${env.isBlankCanvas ? 'Vider le planning libre du jour' : 'Recalculer l\'After-Hours Engine (Tension + Flux Cours → TD → DM)'}">
++          <i class="ph-bold ph-arrows-clockwise"></i> <span>${env.isBlankCanvas ? 'Vider' : 'Optimiser'}</span>
+         </button>
+       </div>
+     </div>
+   `;
+ 
+   const timelineHtml = model.timelineEvents.map(ev => {
+-    if (ev.kind === 'lunch') {
++    if (ev.kind === 'blank_canvas_empty') {
+       return `
+-        <div class="evening-slot-card evening-slot-dinner" style="border-left:3px solid #38BDF8;">
+-          <div class="evening-slot-time mono">
+-            <span>${minToTime(ev.startMin)}</span>
+-            <span class="evening-time-sep">↓</span>
+-            <span>${minToTime(ev.endMin)}</span>
+-            <span class="evening-dur-chip">${ev.durationMin}m</span>
+-          </div>
+-          <div class="evening-slot-body">
+-            <div style="display:flex; align-items:center; justify-content:space-between; gap:8px; flex-wrap:wrap;">
+-              <div style="display:flex; align-items:center; gap:9px;">
+-                <span class="evening-dinner-ico" style="color:#38BDF8; background:rgba(56,189,248,0.14);"><i class="ph-fill ph-coffee"></i></span>
+-                <div>
+-                  <div style="font-weight:700; font-size:13px; color:#BAE6FD;">Pause Déjeuner &amp; Coupure Méridienne</div>
+-                  <div class="hide-mobile" style="font-size:11.5px; color:var(--text-muted);">Coupure recommandée sur journée Blank Canvas · ${ev.durationMin} min</div>
+-                </div>
+-              </div>
+-              <span class="mono" style="font-size:10px; padding:2px 8px; border-radius:99px; background:rgba(56,189,248,0.14); border:1px solid rgba(56,189,248,0.35); color:#38BDF8;">PAUSE MIDI</span>
++        <div class="evening-slot-card evening-slot-free evening-drop-target"
++             ondragover="window.onEveningDragOver(event)"
++             ondragleave="window.onEveningDragLeave(event)"
++             ondrop="window.onEveningDropToTimeline(event)"
++             style="padding:28px 20px; border:1px dashed rgba(52, 211, 153, 0.35); background:rgba(16, 185, 129, 0.03); justify-content:center; text-align:center;">
++          <div style="max-width:460px; margin:0 auto; display:flex; flex-direction:column; align-items:center; gap:8px;">
++            <span style="width:40px; height:40px; border-radius:11px; background:rgba(16,185,129,0.12); border:1px solid rgba(16,185,129,0.3); color:#34D399; display:inline-flex; align-items:center; justify-content:center; font-size:20px;">
++              <i class="ph-bold ph-calendar-blank"></i>
++            </span>
++            <div style="font-weight:700; font-size:14px; color:var(--text-main);">Planning vierge (${escapeHtml(env.canvasReason || 'Journée sans cours')})</div>
++            <div style="font-size:12px; color:var(--text-muted); line-height:1.45;">
++              Aucun cours obligatoire aujourd'hui : l'After-Hours Engine reste volontairement vide.<br>
++              Glisse tes missions ici avec la poignée <strong class="mono">⠿</strong> ou clique sur <b>« + Ajouter au planning »</b> dans la colonne de droite pour composer ton programme.
+             </div>
+           </div>
+         </div>
+@@ -1185,7 +1252,7 @@ function renderEveningPlanner(weekDates) {
+                 <span class="evening-dinner-ico" style="color:#FB7185; background:rgba(244,63,94,0.16);"><i class="ph-fill ph-chalkboard-teacher"></i></span>
+                 <div>
+                   <div style="font-weight:700; font-size:13px; color:#FECDD3;">Séance Académique Tardive : ${escapeHtml(ls.title)}</div>
+-                  <div style="font-size:11.5px; color:rgba(254,205,211,0.75);">Buffer de transition (${ev.bufferMin}m) appliqué dès ${minToTime(ev.startMin - ev.bufferMin)}</div>
++                  <div style="font-size:11.5px; color:rgba(254,205,211,0.75);">Pause de transition (${ev.bufferMin}m) appliquée dès ${minToTime(ev.startMin - ev.bufferMin)}</div>
+                 </div>
+               </div>
+               <span class="mono" style="font-size:10px; padding:2px 8px; border-radius:99px; background:rgba(244,63,94,0.16); border:1px solid rgba(244,63,94,0.38); color:#FDA4AF;">EMPLOI DU TEMPS</span>
+@@ -1218,13 +1285,13 @@ function renderEveningPlanner(weekDates) {
+                 <span class="k-handle evening-drag-handle" title="Glisser pour déplacer la sieste">⠿</span>
+                 <span class="evening-dinner-ico" style="color:#34D399; background:rgba(16,185,129,0.16);"><i class="ph-fill ph-battery-charging"></i></span>
+                 <div style="min-width:0;">
+-                  <div style="font-weight:700; font-size:13px; color:#A7F3D0;">Power Nap &amp; Récupération Cognitive (${ev.durationMin} min)</div>
+-                  <div class="hide-mobile" style="font-size:11.5px; color:rgba(167, 243, 208, 0.75);">Décale automatiquement les missions suivantes (+${ev.durationMin}m) sans aucune suppression</div>
++                  <div style="font-weight:700; font-size:13px; color:#A7F3D0;">Pause Sieste &amp; Récupération (${ev.durationMin} min)</div>
++                  <div class="hide-mobile" style="font-size:11.5px; color:rgba(167, 243, 208, 0.75);">Repousse automatiquement toutes les tâches suivantes de +${ev.durationMin} min</div>
+                 </div>
+               </div>
+               <div style="display:flex; align-items:center; gap:6px;">
+-                <span class="mono" style="font-size:10px; padding:2px 8px; border-radius:99px; background:rgba(16,185,129,0.16); border:1px solid rgba(16,185,129,0.38); color:#34D399;">SIESTE FLASH</span>
+-                <button type="button" onclick="window.removeEveningNap('${nap.id}', '${dayISO}', event)" class="btn-ghost evening-ctrl-btn" style="color:#F87171; padding:3px 7px;" title="Supprimer cette sieste">
++                <span class="mono" style="font-size:10px; padding:2px 8px; border-radius:99px; background:rgba(16,185,129,0.16); border:1px solid rgba(16,185,129,0.38); color:#34D399;">SIESTE +${ev.durationMin}M</span>
++                <button type="button" onclick="window.removeEveningNap('${nap.id}', '${dayISO}', event)" class="btn-ghost evening-ctrl-btn" style="color:#F87171; padding:3px 7px;" title="Retirer cette sieste">
+                   <i class="ph-bold ph-x"></i>
+                 </button>
+               </div>
+@@ -1313,7 +1380,7 @@ function renderEveningPlanner(weekDates) {
+                   ${t._pedagoChainLabel ? `<span class="mono" style="font-size:10px; padding:1px 6px; border-radius:5px; background:rgba(56,189,248,0.14); border:1px solid rgba(56,189,248,0.32); color:#38BDF8; font-weight:600;" title="Ordonnancement pédagogique automatique (Cours → TD/Exos → DM)"><i class="ph-bold ph-flow-arrow"></i> ${escapeHtml(t._pedagoChainLabel)}</span>` : ''}
+                   ${isDone ? `<span class="mono" style="font-size:10px; padding:1px 6px; border-radius:5px; background:rgba(16,185,129,0.18); border:1px solid rgba(16,185,129,0.38); color:#34D399; font-weight:700;">VALIDÉ</span>` : ''}
+                   ${ev.partIndex ? `<span class="mono" style="font-size:10px; padding:1px 6px; border-radius:5px; background:rgba(255,255,255,0.08); color:var(--text-muted);">Partie ${ev.partIndex}/${ev.totalParts}</span>` : ''}
+-                  ${ev.shiftedPastBedtime ? `<span class="mono" style="font-size:10px; padding:1px 6px; border-radius:5px; background:rgba(245,158,11,0.15); border:1px solid rgba(245,158,11,0.35); color:#FBBF24;">Décalé (Sieste)</span>` : ''}
++                  ${ev.shiftedByNapMin ? `<span class="mono" style="font-size:10px; padding:1px 6px; border-radius:5px; background:rgba(16,185,129,0.15); border:1px solid rgba(16,185,129,0.35); color:#34D399;" title="Repoussé de ${ev.shiftedByNapMin} min par votre sieste"><i class="ph-bold ph-clock-clockwise"></i> Repoussé +${ev.shiftedByNapMin}m (Sieste)</span>` : ''}
+                 </div>
+                 <div class="evening-task-title" style="${isDone ? 'text-decoration:line-through; color:var(--text-subtle);' : 'color:var(--text-main);'}">${escapeHtml(t.title)}</div>
+                 ${phaseLbl ? `<div style="font-size:11.5px; color:${isDone ? '#10B981' : '#38BDF8'}; margin-top:3px; font-weight:600; ${isDone ? 'text-decoration:line-through;' : ''}"><i class="ph-bold ph-git-commit"></i> ${escapeHtml(phaseLbl)}</div>` : ''}
+@@ -1326,7 +1393,7 @@ function renderEveningPlanner(weekDates) {
+               <button type="button" onclick="event.stopPropagation(); window.adjustEveningTaskDuration('${t.id}', 0.25, event)" class="btn-ghost evening-ctrl-btn" title="Augmenter le temps ce soir (+15 min)">+15m</button>
+               <button type="button" onclick="event.stopPropagation(); window.moveEveningTaskOrder('${t.id}', -1, event)" class="btn-ghost evening-ctrl-btn" title="Monter dans la timeline"><i class="ph-bold ph-arrow-up"></i></button>
+               <button type="button" onclick="event.stopPropagation(); window.moveEveningTaskOrder('${t.id}', 1, event)" class="btn-ghost evening-ctrl-btn" title="Descendre dans la timeline"><i class="ph-bold ph-arrow-down"></i></button>
+-              <button type="button" onclick="event.stopPropagation(); window.deferTaskToOverflow('${t.id}', event)" class="btn-ghost evening-ctrl-btn evening-ctrl-defer" title="Reporter (Basculer dans À reporter)"><i class="ph-bold ph-arrow-elbow-right"></i> <span class="evening-defer-lbl">Reporter</span></button>
++              <button type="button" onclick="event.stopPropagation(); window.deferTaskToOverflow('${t.id}', event)" class="btn-ghost evening-ctrl-btn evening-ctrl-defer" title="Retirer de la timeline"><i class="ph-bold ph-arrow-elbow-right"></i> <span class="evening-defer-lbl">Reporter</span></button>
+             </div>
+           </div>
+         </div>
+@@ -1352,11 +1419,16 @@ function renderEveningPlanner(weekDates) {
+     </div>
+   `;
+ 
++  const overflowTitle = env.isBlankCanvas ? `Missions à placer (${model.overflowTasks.length})` : `À reporter (${model.overflowTasks.length})`;
++  const overflowSub = env.isBlankCanvas
++    ? 'Planning vierge par défaut : clique sur « + Ajouter au planning » ou glisse ⠿ vers la gauche pour composer ta journée.'
++    : 'Missions hors enveloppe horaire. Glisse la poignée ⠿ vers la timeline ou clique sur « Prioriser ce soir ».';
++
+   const overflowHtml = model.overflowTasks.length === 0
+     ? `
+       <div class="evening-overflow-empty">
+         <i class="ph-bold ph-check-circle" style="font-size:20px; color:#10B981; margin-bottom:4px;"></i>
+-        <div style="font-weight:600; font-size:12.5px; color:var(--text-main);">Aucun débordement ce soir</div>
++        <div style="font-weight:600; font-size:12.5px; color:var(--text-main);">${env.isBlankCanvas ? 'Toutes vos missions sont placées' : 'Aucun débordement ce soir'}</div>
+         <div style="font-size:11.5px; color:var(--text-muted);">Toutes vos missions actives rentrent dans l'After-Hours Engine avant ${escapeHtml(cfg.bedtime || '23:00')}.</div>
+       </div>
+     `
+@@ -1365,6 +1437,7 @@ function renderEveningPlanner(weekDates) {
+         const s = getSubject(t.subject);
+         const p = computePressure(t);
+         const durH = (item.neededMin / 60).toFixed(1).replace(/\.0$/, '');
++        const btnLabel = item.isBlankCanvasPool ? '+ Ajouter au planning' : 'Prioriser ce soir';
+         return `
+           <div class="saas-card evening-overflow-card"
+                draggable="true"
+@@ -1381,9 +1454,9 @@ function renderEveningPlanner(weekDates) {
+             </div>
+             <div style="font-weight:600; font-size:13px; color:var(--text-main); margin-bottom:4px;">${escapeHtml(t.title)}</div>
+             <div style="display:flex; justify-content:space-between; align-items:center; gap:8px; margin-top:8px; padding-top:8px; border-top:1px solid var(--border-subtle); flex-wrap:wrap;">
+-              <span style="font-size:11px; color:#F59E0B;"><i class="ph ph-clock-countdown"></i> ${escapeHtml(item.reason)}</span>
+-              <button type="button" onclick="event.stopPropagation(); window.prioritizeTaskTonight('${t.id}', event)" class="btn-ghost evening-ctrl-btn" style="padding:5px 10px; font-size:11px;">
+-                <i class="ph-bold ph-arrow-up-left"></i> Prioriser ce soir
++              <span style="font-size:11px; color:${item.isBlankCanvasPool ? '#34D399' : '#F59E0B'};"><i class="ph ${item.isBlankCanvasPool ? 'ph-hand-grabbing' : 'ph-clock-countdown'}"></i> ${escapeHtml(item.reason)}</span>
++              <button type="button" onclick="event.stopPropagation(); window.prioritizeTaskTonight('${t.id}', event)" class="btn-ghost evening-ctrl-btn" style="padding:5px 10px; font-size:11px; ${item.isBlankCanvasPool ? 'color:#34D399; border-color:rgba(16,185,129,0.35);' : ''}">
++                <i class="ph-bold ph-arrow-up-left"></i> ${btnLabel}
+               </button>
+             </div>
+           </div>
+@@ -1418,13 +1491,13 @@ function renderEveningPlanner(weekDates) {
+            ondragleave="window.onEveningDragLeave(event)"
+            ondrop="window.onEveningDropToOverflow(event)">
+         <div class="evening-section-head">
+-          <div style="font-size:12.5px; font-weight:700; text-transform:uppercase; letter-spacing:0.04em; color:#F59E0B;">
+-            <i class="ph-bold ph-tray"></i> À reporter (${model.overflowTasks.length})
++          <div style="font-size:12.5px; font-weight:700; text-transform:uppercase; letter-spacing:0.04em; color:${env.isBlankCanvas ? '#34D399' : '#F59E0B'};">
++            <i class="ph-bold ${env.isBlankCanvas ? 'ph-list-plus' : 'ph-tray'}"></i> ${overflowTitle}
+           </div>
+-          <span class="mono" style="font-size:11px; color:var(--text-subtle);">Après ${escapeHtml(cfg.bedtime || '23:00')}</span>
++          <span class="mono" style="font-size:11px; color:var(--text-subtle);">${env.isBlankCanvas ? 'À la carte' : 'Après ' + escapeHtml(cfg.bedtime || '23:00')}</span>
+         </div>
+         <p class="hide-mobile" style="font-size:11.5px; color:var(--text-muted); margin-bottom:12px;">
+-          Missions hors enveloppe horaire. Glisse la poignée ⠿ vers la timeline ou clique sur « Prioriser ce soir ».
++          ${overflowSub}
+         </p>
+         <div style="display:flex; flex-direction:column; gap:10px;">
+           ${overflowHtml}
+@@ -1596,6 +1669,8 @@ window.saveSlotForm = function(e) {
+   saveState();
+   closeSlotModal();
+   renderAgenda();
++  if (typeof window.renderSettingsPanel === 'function') window.renderSettingsPanel();
++  if (typeof renderCahier === 'function' && state.activeTab === 'cahier') renderCahier();
+ };
+ 
+ window.deleteCurrentSlot = function() {
+@@ -1605,6 +1680,8 @@ window.deleteCurrentSlot = function() {
+   saveState();
+   closeSlotModal();
+   renderAgenda();
++  if (typeof window.renderSettingsPanel === 'function') window.renderSettingsPanel();
++  if (typeof renderCahier === 'function' && state.activeTab === 'cahier') renderCahier();
+   showToast('Créneau supprimé');
+ };
+ 
+diff --git a/js/daily_drop.js b/js/daily_drop.js
+index c6cfc45..7114944 100644
+--- a/js/daily_drop.js
++++ b/js/daily_drop.js
+@@ -213,19 +213,26 @@ function ensureAnkiModalMounted() {
+   modal.id = 'anki-modal';
+   modal.className = 'modal-backdrop';
+   modal.innerHTML = `
+-    <div class="modal-box" style="max-width:480px;">
+-      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px;">
++    <div class="modal-box" style="max-width:500px;">
++      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+         <div style="display:flex; align-items:center; gap:9px;">
+           <span style="width:32px; height:32px; border-radius:9px; background:rgba(56,189,248,0.14); border:1px solid rgba(56,189,248,0.32); color:#38BDF8; display:inline-flex; align-items:center; justify-content:center; font-size:16px;">
+             <i class="ph-bold ph-cards"></i>
+           </span>
+           <div>
+             <h3 style="font-size:15px; font-weight:700;">Ajouter à Anki (AnkiConnect)</h3>
+-            <div class="mono" style="font-size:10.5px; color:var(--text-subtle);">POST http://localhost:8765 · Note Type : Basic</div>
++            <div id="anki-conn-subtitle" class="mono" style="font-size:10.5px; color:var(--text-subtle);">127.0.0.1:8765 · Auto-détection Basic / Basique</div>
+           </div>
+         </div>
+         <button type="button" onclick="window.closeAnkiModal()" class="btn-ghost" style="padding:4px 7px; border:none;"><i class="ph ph-x"></i></button>
+       </div>
++      <div style="font-size:11px; color:var(--text-muted); background:rgba(255,255,255,0.03); border:1px solid var(--border-subtle); border-radius:8px; padding:8px 10px; margin-bottom:12px; display:flex; align-items:center; justify-content:space-between; gap:8px; flex-wrap:wrap;">
++        <span><i class="ph-bold ph-plugs-connected" style="color:#38BDF8;"></i> Greffon <b>AnkiConnect</b> (<code class="mono" style="color:#38BDF8;">2055492159</code>) · Si bloqué : autorise dans Anki ou copie la Config CORS</span>
++        <div style="display:flex; gap:5px;">
++          <button type="button" onclick="window.copyAnkiAddonCode()" class="btn-ghost mono" style="padding:2px 7px; font-size:10px;" title="Copier le code du greffon 2055492159">Code 2055492159</button>
++          <button type="button" onclick="window.copyAnkiCorsConfig()" class="btn-ghost mono" style="padding:2px 7px; font-size:10px; color:#38BDF8; border-color:rgba(56,189,248,0.32);" title="Copier la configuration CORS AnkiConnect">Copier Config CORS</button>
++        </div>
++      </div>
+       <form onsubmit="window.submitAnkiCard(event)" style="display:flex; flex-direction:column; gap:12px;">
+         <div>
+           <label style="font-size:11.5px; font-weight:600; color:var(--text-muted); display:flex; justify-content:space-between; margin-bottom:4px;">
+@@ -242,12 +249,17 @@ function ensureAnkiModalMounted() {
+           <label style="font-size:11.5px; font-weight:600; color:var(--text-muted); display:block; margin-bottom:4px;">Back (Verso — Traduction, Définition &amp; Exemple) *</label>
+           <textarea id="anki-back-input" class="saas-input" rows="4" style="resize:vertical;" required></textarea>
+         </div>
+-        <div id="anki-modal-status" style="display:none; font-size:11.5px; padding:8px 10px; border-radius:8px;"></div>
+-        <div style="display:flex; justify-content:flex-end; gap:8px; margin-top:4px;">
+-          <button type="button" onclick="window.closeAnkiModal()" class="btn-ghost">Annuler</button>
+-          <button type="submit" id="anki-submit-btn" class="btn-primary">
+-            <i class="ph-bold ph-paper-plane-tilt"></i> <span>Ajouter la carte</span>
++        <div id="anki-modal-status" style="display:none; font-size:11.5px; padding:9px 11px; border-radius:9px; line-height:1.45;"></div>
++        <div style="display:flex; justify-content:space-between; align-items:center; gap:8px; margin-top:4px; flex-wrap:wrap;">
++          <button type="button" onclick="window.copyAnkiCardFallback()" class="btn-ghost" style="font-size:11.5px; padding:6px 10px;" title="Copier Recto/Verso dans le presse-papiers si vous n'utilisez pas AnkiConnect">
++            <i class="ph ph-copy"></i> <span>Copier texte</span>
+           </button>
++          <div style="display:flex; gap:8px;">
++            <button type="button" onclick="window.closeAnkiModal()" class="btn-ghost">Annuler</button>
++            <button type="submit" id="anki-submit-btn" class="btn-primary">
++              <i class="ph-bold ph-paper-plane-tilt"></i> <span>Ajouter la carte</span>
++            </button>
++          </div>
+         </div>
+       </form>
+     </div>
+@@ -258,6 +270,118 @@ function ensureAnkiModalMounted() {
+   document.body.appendChild(modal);
+ }
+ 
++window.copyAnkiAddonCode = function() {
++  if (navigator.clipboard && navigator.clipboard.writeText) {
++    navigator.clipboard.writeText('2055492159').then(() => {
++      showToast('Code AnkiConnect 2055492159 copié !');
++    }).catch(() => {
++      showToast('Code AnkiConnect : 2055492159');
++    });
++  } else {
++    showToast('Code AnkiConnect : 2055492159');
++  }
++};
++
++window.copyAnkiCorsConfig = function() {
++  const origin = (typeof window !== 'undefined' && window.location && window.location.origin && window.location.origin !== 'null')
++    ? window.location.origin
++    : null;
++  const origins = ['http://localhost', 'http://127.0.0.1', 'null', '*'];
++  if (origin && !origins.includes(origin)) origins.unshift(origin);
++
++  const cfgJson = JSON.stringify({
++    apiKey: null,
++    apiLogPath: null,
++    ignoreOriginList: [],
++    webBindAddress: '127.0.0.1',
++    webBindPort: 8765,
++    webCorsOriginList: origins
++  }, null, 4);
++
++  if (navigator.clipboard && navigator.clipboard.writeText) {
++    navigator.clipboard.writeText(cfgJson).then(() => {
++      showToast('Config CORS copiée ! Colle-la dans Anki → Outils → Greffons → AnkiConnect → Config puis redémarre Anki.');
++    }).catch(() => {
++      showToast('Impossible de copier automatiquement la config');
++    });
++  }
++};
++
++window.copyAnkiCardFallback = function() {
++  const frontEl = document.getElementById('anki-front-input');
++  const backEl = document.getElementById('anki-back-input');
++  const f = String(frontEl ? frontEl.value : '').trim();
++  const b = String(backEl ? backEl.value : '').trim();
++  const txt = `${f}\t${b.replace(/\r?\n/g, ' — ')}`;
++  if (navigator.clipboard && navigator.clipboard.writeText) {
++    navigator.clipboard.writeText(txt).then(() => {
++      showToast('Carte copiée (Recto + Verso) dans le presse-papiers ✓');
++    }).catch(() => {
++      showToast('Impossible de copier automatiquement');
++    });
++  }
++};
++
++/**
++ * Envoie une requête à AnkiConnect en utilisant une requête CORS Simple (text/plain sans en-tête Content-Type: application/json)
++ * pour éviter le preflight OPTIONS quand c'est possible, et teste 127.0.0.1 puis localhost.
++ */
++async function invokeAnkiConnect(action, params = {}) {
++  const payload = JSON.stringify({ action, version: 6, params });
++  const endpoints = ['http://127.0.0.1:8765', 'http://localhost:8765'];
++  let lastErr = null;
++
++  for (const url of endpoints) {
++    try {
++      const res = await fetch(url, {
++        method: 'POST',
++        body: payload
++      });
++      const text = await res.text();
++      return text ? JSON.parse(text) : { result: null, error: null };
++    } catch (err) {
++      lastErr = err;
++    }
++  }
++  throw lastErr || new Error('AnkiConnect unreachable');
++}
++
++/**
++ * Résout automatiquement le type de note (Basic en anglais, Basique en français, ou premier modèle disponible)
++ * ainsi que le nom exact de ses 2 premiers champs (ex. Front/Back ou Recto/Verso).
++ */
++async function resolveAnkiNoteModelAndFields() {
++  let modelName = 'Basic';
++  let frontField = 'Front';
++  let backField = 'Back';
++
++  try {
++    const modelsRes = await invokeAnkiConnect('modelNames');
++    const models = Array.isArray(modelsRes && modelsRes.result) ? modelsRes.result : [];
++    if (models.length > 0) {
++      const preferred = ['Basic', 'Basique', 'Basic (and reversed card)', 'Basique (et carte inversée)'];
++      const exactMatch = preferred.find(p => models.includes(p));
++      const caseMatch = models.find(m => /^basi(c|que)\b/i.test(String(m)));
++      const nonCloze = models.find(m => !/cloze|texte à trous/i.test(String(m)));
++      modelName = exactMatch || caseMatch || nonCloze || models[0];
++    }
++
++    const fieldsRes = await invokeAnkiConnect('modelFieldNames', { modelName });
++    const fields = Array.isArray(fieldsRes && fieldsRes.result) ? fieldsRes.result : [];
++    if (fields.length >= 2) {
++      frontField = fields[0];
++      backField = fields[1];
++    } else if (fields.length === 1) {
++      frontField = fields[0];
++      backField = fields[0];
++    }
++  } catch (_) {
++    // Fallback silencieux sur Basic / Front / Back
++  }
++
++  return { modelName, frontField, backField };
++}
++
+ window.openAnkiModal = function(front = '', back = '', customDeck = null) {
+   ensureAnkiModalMounted();
+   const cfg = (typeof state !== 'undefined' && state.settings) ? state.settings : DEFAULT_SETTINGS;
+@@ -320,47 +444,46 @@ window.submitAnkiCard = async function(e) {
+ 
+   if (btn) {
+     btn.disabled = true;
+-    btn.innerHTML = `<i class="ph-bold ph-spinner"></i> <span>Connexion à Anki...</span>`;
++    btn.innerHTML = `<i class="ph-bold ph-spinner"></i> <span>Autorisation Anki...</span>`;
++  }
++  if (statusEl) {
++    statusEl.style.display = 'block';
++    statusEl.style.background = 'rgba(56, 189, 248, 0.10)';
++    statusEl.style.border = '1px solid rgba(56, 189, 248, 0.30)';
++    statusEl.style.color = '#BAE6FD';
++    statusEl.innerHTML = `<i class="ph-bold ph-bell-ringing"></i> Si une fenêtre <b>« A website wants to access to Anki »</b> s'ouvre dans Anki, clique sur <b>Yes / Oui</b>.`;
+   }
+ 
+   try {
+-    // 1. Créer le deck (supporte la hiérarchie Parent::Child) au cas où il n'existe pas encore dans Anki
+-    await fetch('http://localhost:8765', {
+-      method: 'POST',
+-      headers: { 'Content-Type': 'application/json' },
+-      body: JSON.stringify({
+-        action: 'createDeck',
+-        version: 6,
+-        params: { deck: deckName }
+-      })
+-    });
++    // 1. Demander la permission à AnkiConnect (indispensable au 1er appel sinon AnkiConnect renvoie 403 Forbidden)
++    const permRes = await invokeAnkiConnect('requestPermission');
++    if (permRes && permRes.result && permRes.result.permission === 'denied') {
++      throw new Error('PERMISSION_DENIED');
++    }
+ 
+-    // 2. Appel addNote via AnkiConnect
+-    const res = await fetch('http://localhost:8765', {
+-      method: 'POST',
+-      headers: { 'Content-Type': 'application/json' },
+-      body: JSON.stringify({
+-        action: 'addNote',
+-        version: 6,
+-        params: {
+-          note: {
+-            deckName,
+-            modelName: 'Basic',
+-            fields: {
+-              Front: frontHtml,
+-              Back: backHtml
+-            },
+-            options: {
+-              allowDuplicate: false,
+-              duplicateScope: 'deck'
+-            },
+-            tags: ['pcsi_os', 'daily_drop']
+-          }
+-        }
+-      })
++    // 2. Créer le deck (supporte la hiérarchie Parent::Child) au cas où il n'existe pas encore dans Anki
++    await invokeAnkiConnect('createDeck', { deck: deckName });
++
++    // 3. Détecter automatiquement le modèle (Basic en EN, Basique en FR) et ses champs (Front/Back ou Recto/Verso)
++    const { modelName, frontField, backField } = await resolveAnkiNoteModelAndFields();
++    const fieldsObj = {};
++    fieldsObj[frontField] = frontHtml;
++    fieldsObj[backField] = backHtml;
++
++    // 4. Appel addNote via AnkiConnect
++    const data = await invokeAnkiConnect('addNote', {
++      note: {
++        deckName,
++        modelName,
++        fields: fieldsObj,
++        options: {
++          allowDuplicate: true,
++          duplicateScope: 'deck'
++        },
++        tags: ['pcsi_os', 'daily_drop']
++      }
+     });
+ 
+-    const data = await res.json();
+     if (data && data.error) {
+       if (statusEl) {
+         statusEl.style.display = 'block';
+@@ -375,14 +498,23 @@ window.submitAnkiCard = async function(e) {
+       showToast(`Carte ajoutée dans Anki (${deckName}) ✓`);
+     }
+   } catch (err) {
++    const curOrigin = (typeof window !== 'undefined' && window.location) ? (window.location.origin || 'null') : 'null';
+     if (statusEl) {
+       statusEl.style.display = 'block';
+       statusEl.style.background = 'rgba(239, 68, 68, 0.12)';
+       statusEl.style.border = '1px solid rgba(239, 68, 68, 0.35)';
+       statusEl.style.color = '#FCA5A5';
+-      statusEl.innerHTML = `Impossible de joindre <b>http://localhost:8765</b>. Vérifie qu'<b>Anki</b> est ouvert sur ton ordinateur avec l'extension <b>AnkiConnect</b> (code <code class="mono">2055492159</code>).`;
++      statusEl.innerHTML = `
++        <div style="font-weight:700; margin-bottom:4px;"><i class="ph-bold ph-warning-circle"></i> Connexion bloquée par AnkiConnect (CORS / Origine <code class="mono">${escapeHtml(curOrigin)}</code>)</div>
++        <div style="font-size:11px; color:rgba(252,165,165,0.95); line-height:1.5;">
++          Par défaut, AnkiConnect bloque les pages web autres que <code class="mono">http://localhost</code>. Pour l'autoriser en 10 secondes :<br>
++          <b>1.</b> Clique sur <button type="button" onclick="window.copyAnkiCorsConfig()" class="btn-ghost mono" style="padding:1px 6px; font-size:10px; color:#38BDF8; border-color:rgba(56,189,248,0.4);">📋 Copier Config CORS</button><br>
++          <b>2.</b> Dans Anki : <b>Outils → Greffons → AnkiConnect → Config</b> → sélectionne tout et <b>Colle (Ctrl+V)</b> → <b>OK</b>.<br>
++          <b>3.</b> <b>Redémarre Anki</b> (obligatoire après l'installation ou la modification du greffon).
++        </div>
++      `;
+     }
+-    showToast('Anki non détecté sur localhost:8765 (vérifie qu\'Anki est ouvert)');
++    showToast('Autorise l\'origine dans AnkiConnect → Config puis redémarre Anki');
+   } finally {
+     if (btn) {
+       btn.disabled = false;
+diff --git a/js/missions.js b/js/missions.js
+index 9e55652..33bf5fe 100644
+--- a/js/missions.js
++++ b/js/missions.js
+@@ -151,9 +151,10 @@ function computePressure(task) {
+   // 2. Durée Estimée (échelle 0 - 100)
+   const durationScore = 100 * (1 - Math.exp(-remDur / 2.4));
+ 
+-  // 3. AutoDSFactor (Boost automatique si matière au programme du DS de samedi)
++  // 3. AutoDSFactor (Boost automatique si matière au programme du prochain DS)
+   const dsSubjects = getUpcomingSaturdayDsSubjects();
+-  const isDsSubject = cfg.autoDsBoost && (dsSubjects.includes(task.subject) || task.type === 'DS');
++  const isDsTitle = /\b(ds|devoir\s+surveill[eé]|concours\s+blanc)\b/i.test(task.title || '');
++  const isDsSubject = Boolean(cfg.autoDsBoost && (dsSubjects.includes(task.subject) || task.type === 'DS' || isDsTitle));
+   const dsFactor = isDsSubject ? (parseFloat(cfg.dsBoostFactor) || 1.4) : 1.0;
+ 
+   // Calcul exact de la Tension avec TypeMultiplier * ManualImportance * AutoDSFactor
+@@ -313,12 +314,14 @@ window.quickAddMission = function(e) {
+   const tInput = document.getElementById('qa-title');
+   const t = tInput.value.trim();
+   if (!t) return;
+-  const detectedType = currentQuickAddType || inferTaskTypeFromTitle(t);
++  const titleInferredType = inferTaskTypeFromTitle(t);
++  const explicitPrefixMatch = /^(ds|dm|td|tp|colle|kh[ôo]lle|cours|r[ée]vision)\b/i.test(t);
++  const finalType = explicitPrefixMatch ? titleInferredType : (currentQuickAddType || titleInferredType);
+   const dur = parseFloat(document.getElementById('qa-duration').value) || 1.5;
+   state.tasks.unshift({
+     id: 't_' + Date.now(),
+     title: t,
+-    type: detectedType === 'DS' && currentQuickAddType !== 'DS' ? DEFAULT_TASK_TYPE : detectedType,
++    type: finalType,
+     importance: 1.0,
+     note: '',
+     subject: customSelectValues['qa-subj'] || Object.keys(SUBJECTS)[0] || 'maths',
+@@ -332,6 +335,7 @@ window.quickAddMission = function(e) {
+   tInput.value = '';
+   saveState();
+   renderCahier();
++  if (typeof window.renderSettingsPanel === 'function') window.renderSettingsPanel();
+   showToast('Mission ajoutée');
+ };
+ 
+diff --git a/js/portals.js b/js/portals.js
+index 3621bb6..ac1b5a7 100644
+--- a/js/portals.js
++++ b/js/portals.js
+@@ -150,12 +150,16 @@ window.toggleAutoDsBoost = function() {
+   showToast(state.settings.autoDsBoost ? 'Boost Auto-DS activé' : 'Boost Auto-DS désactivé');
+ };
+ 
+-window.setDsSubjectOverride = function(val) {
++window.setDsSubjectOverride = function(val, event = null) {
++  if (event) event.stopPropagation();
++  document.querySelectorAll('.custom-select.open').forEach(el => el.classList.remove('open'));
+   if (!state.settings) state.settings = JSON.parse(JSON.stringify(DEFAULT_SETTINGS));
+   state.settings.dsSubjectOverride = val || 'auto';
+   saveState();
+   window.renderSettingsPanel();
+   if (state.activeTab === 'cahier') renderCahier();
++  const label = (!val || val === 'auto') ? 'Détection Auto-DS activée' : `Boost DS forcé : ${SUBJECTS[val]?.name || val}`;
++  showToast(label);
+ };
+ 
+ window.updateSettingValue = function(key, val) {
+@@ -465,9 +469,27 @@ window.renderSettingsPanel = function() {
+   const cfg = state.settings || DEFAULT_SETTINGS;
+   const alphaPct = Math.round((cfg.alpha || 0.65) * 100);
+   const detectedDsSubjects = getUpcomingSaturdayDsSubjects();
+-  const detectedDsNames = detectedDsSubjects.map(id => SUBJECTS[id]?.name || id).join(', ') || 'Aucun DS détecté ce samedi';
++  const hasDetectedDs = detectedDsSubjects.length > 0;
++  const detectedDsNames = hasDetectedDs
++    ? detectedDsSubjects.map(id => SUBJECTS[id]?.name || id).join(', ')
++    : 'Aucun DS détecté';
+   const mults = Object.assign({}, DEFAULT_TYPE_MULTIPLIERS, cfg.typeMultipliers || {});
+ 
++  const dsOverrideVal = cfg.dsSubjectOverride || 'auto';
++  const dsSelectOptions = [
++    {
++      value: 'auto',
++      label: `Auto (${detectedDsNames})`,
++      dot: hasDetectedDs && SUBJECTS[detectedDsSubjects[0]] ? SUBJECTS[detectedDsSubjects[0]].color : null
++    },
++    ...Object.values(SUBJECTS).map(s => ({
++      value: s.id,
++      label: `Forcer : ${s.name}`,
++      dot: s.color
++    }))
++  ];
++  const currentDsOpt = dsSelectOptions.find(o => o.value === dsOverrideVal) || dsSelectOptions[0];
++
+   const typeList = Object.values(TASK_TYPES);
+ 
+   mount.innerHTML = `
+@@ -503,28 +525,50 @@ window.renderSettingsPanel = function() {
+         <div class="settings-field-group" style="border-top:1px solid var(--border-subtle); padding-top:12px;">
+           <div style="display:flex; justify-content:space-between; align-items:center; gap:10px; margin-bottom:10px;">
+             <div>
+-              <div style="font-size:12.5px; font-weight:600; color:var(--text-main);">Facteur Auto-DS du Samedi</div>
+-              <div style="font-size:11px; color:var(--text-muted);">Amplifie automatiquement la tension des missions de la matière du prochain DS</div>
++              <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
++                <span style="font-size:12.5px; font-weight:600; color:var(--text-main);">Détecteur &amp; Boost Auto-DS</span>
++                <span class="mono" style="font-size:10px; padding:2px 7px; border-radius:99px; background:${hasDetectedDs ? 'rgba(234,179,8,0.16)' : 'rgba(255,255,255,0.06)'}; border:1px solid ${hasDetectedDs ? 'rgba(234,179,8,0.4)' : 'var(--border-subtle)'}; color:${hasDetectedDs ? '#FACC15' : 'var(--text-muted)'};">
++                  <i class="ph-bold ${hasDetectedDs ? 'ph-lightning' : 'ph-magnifying-glass'}"></i> ${escapeHtml(detectedDsNames)}
++                </span>
++              </div>
++              <div style="font-size:11px; color:var(--text-muted); margin-top:2px;">Détecte les DS dans l'Agenda et les Missions à venir (≤ 10j) et amplifie leur matière</div>
+             </div>
+             <button type="button" onclick="window.toggleAutoDsBoost()" class="settings-toggle-btn ${cfg.autoDsBoost ? 'on' : ''}" aria-label="Activer Boost Auto-DS">
+               <span class="settings-toggle-knob"></span>
+             </button>
+           </div>
+ 
+-          <div class="settings-subgrid-2" style="display:grid; grid-template-columns:1fr 1fr; gap:10px; align-items:center; ${cfg.autoDsBoost ? '' : 'opacity:0.45; pointer-events:none;'}">
++          <div class="settings-subgrid-2" style="display:grid; grid-template-columns:1fr 1fr; gap:12px; align-items:end; ${cfg.autoDsBoost ? '' : 'opacity:0.45; pointer-events:none;'}">
+             <div>
+-              <div style="display:flex; justify-content:space-between; font-size:11.5px; margin-bottom:4px;">
++              <div style="display:flex; justify-content:space-between; font-size:11.5px; margin-bottom:6px;">
+                 <span style="color:var(--text-muted);">Multiplicateur DS</span>
+                 <span id="cfg-ds-boost-readout" class="mono" style="font-weight:700; color:#F59E0B;">×${(cfg.dsBoostFactor || 1.4).toFixed(1)}</span>
+               </div>
+               <input type="range" min="1.1" max="2.2" step="0.1" value="${cfg.dsBoostFactor || 1.4}" oninput="window.onDsBoostFactorInput(this.value)" class="saas-range" />
+             </div>
+             <div>
+-              <label style="font-size:11px; color:var(--text-muted); display:block; margin-bottom:4px;">Matière ciblée Samedi</label>
+-              <select class="saas-input" style="padding:6px 10px; font-size:11.5px;" onchange="window.setDsSubjectOverride(this.value)">
+-                <option value="auto" ${(!cfg.dsSubjectOverride || cfg.dsSubjectOverride === 'auto') ? 'selected' : ''}>Auto (${escapeHtml(detectedDsNames)})</option>
+-                ${Object.values(SUBJECTS).map(s => `<option value="${s.id}" ${cfg.dsSubjectOverride === s.id ? 'selected' : ''}>Forcer : ${escapeHtml(s.name)}</option>`).join('')}
+-              </select>
++              <label style="font-size:11px; color:var(--text-muted); display:block; margin-bottom:5px;">Matière ciblée (Auto ou Forcée)</label>
++              <div class="custom-select" id="cs-ds-override">
++                <div class="custom-select-trigger" style="padding:7px 11px; font-size:12px;" onclick="window.toggleCustomSelect('ds-override', event)">
++                  <span style="display:flex; align-items:center; gap:7px; overflow:hidden; white-space:nowrap;">
++                    ${currentDsOpt.dot ? `<span class="subj-dot" style="background:${currentDsOpt.dot};"></span>` : `<i class="ph-bold ph-magic-wand" style="color:#FACC15; font-size:12px;"></i>`}
++                    <span>${escapeHtml(currentDsOpt.label)}</span>
++                  </span>
++                  <i class="ph ph-caret-down" style="font-size:12px; color:var(--text-subtle);"></i>
++                </div>
++                <div class="custom-select-menu">
++                  ${dsSelectOptions.map(opt => {
++                    const isSel = opt.value === dsOverrideVal;
++                    const dotHtml = opt.dot ? `<span class="subj-dot" style="background:${opt.dot};"></span>` : `<i class="ph-bold ph-magic-wand" style="color:#FACC15; font-size:12px;"></i>`;
++                    return `
++                      <div class="custom-select-option ${isSel ? 'selected' : ''}" onclick="window.setDsSubjectOverride('${opt.value}', event)">
++                        <span style="display:flex; align-items:center; gap:7px;">${dotHtml}<span>${escapeHtml(opt.label)}</span></span>
++                        ${isSel ? '<i class="ph-bold ph-check" style="font-size:11px;"></i>' : ''}
++                      </div>
++                    `;
++                  }).join('')}
++                </div>
++              </div>
+             </div>
+           </div>
+         </div>
+@@ -550,7 +594,7 @@ window.renderSettingsPanel = function() {
+           </div>
+           <div>
+             <h3 style="font-size:14.5px; font-weight:700;">After-Hours Engine &amp; AnkiConnect</h3>
+-            <p style="font-size:11.5px; color:var(--text-muted);">Enveloppe horaire dynamique, buffer de trajet et deck Anki cible</p>
++            <p style="font-size:11.5px; color:var(--text-muted);">Horaires du soir, pause après les cours et deck Anki cible</p>
+           </div>
+         </div>
+ 
+@@ -578,7 +622,7 @@ window.renderSettingsPanel = function() {
+           </div>
+           <div>
+             <label style="font-size:11.5px; font-weight:600; color:var(--text-muted); display:block; margin-bottom:5px;">
+-              <i class="ph-bold ph-person-simple-walk" style="color:#34D399;"></i> Buffer Trajet / Transition (min)
++              <i class="ph-bold ph-person-simple-walk" style="color:#34D399;"></i> Pause / Trajet après cours (min)
+             </label>
+             <input type="number" min="0" max="120" step="5" class="saas-input mono" value="${Number.isFinite(Number(cfg.commuteBufferMin)) ? Number(cfg.commuteBufferMin) : 30}" onchange="window.updateSettingValue('commuteBufferMin', this.value)" />
+           </div>
+@@ -587,11 +631,11 @@ window.renderSettingsPanel = function() {
+         <div style="padding-top:10px; border-top:1px solid var(--border-subtle);">
+           <label style="font-size:11.5px; font-weight:600; color:var(--text-muted); display:flex; align-items:center; justify-content:space-between; margin-bottom:5px;">
+             <span><i class="ph-bold ph-cards" style="color:#38BDF8;"></i> Target Anki Deck <small style="color:var(--text-subtle); font-weight:400;">(Syntaxe Parent::Enfant)</small></span>
+-            <span class="mono" style="font-size:10px; color:#38BDF8;">localhost:8765</span>
++            <span class="mono" style="font-size:10px; color:#38BDF8;">127.0.0.1:8765</span>
+           </label>
+           <input type="text" id="settings-anki-deck-input" class="saas-input mono" placeholder="PCSI::Vocabulaire (ex: Anglais::Vocabulaire)" value="${escapeHtml(cfg.ankiDeck || 'PCSI::Vocabulaire')}" onchange="window.updateSettingValue('ankiDeck', this.value)" />
+           <div style="font-size:11px; color:var(--text-subtle); margin-top:4px;">
+-            Utilisé par les boutons <b>[+ Anki]</b> du Daily Drop. Défaut si vide : <code class="mono">PCSI::Vocabulaire</code>.
++            Utilisé par les boutons <b>[+ Anki]</b> du Daily Drop. Nécessite le greffon AnkiConnect (<code class="mono">2055492159</code>).
+           </div>
+         </div>
+ 
+diff --git a/js/state.js b/js/state.js
+index 1bda98a..de0c699 100644
+--- a/js/state.js
++++ b/js/state.js
+@@ -106,7 +106,7 @@ function normalizeSettingsState() {
+   state.settings.ankiDeck = rawDeck || 'PCSI::Vocabulaire';
+ 
+   if (!state.eveningPlan || typeof state.eveningPlan !== 'object') {
+-    state.eveningPlan = { manualOrder: [], excludedIds: [], customDurations: {}, pinnedEveningIds: [], naps: {} };
++    state.eveningPlan = { manualOrder: [], excludedIds: [], customDurations: {}, pinnedEveningIds: [], naps: {}, canvasAddedByDay: {} };
+   }
+   if (!Array.isArray(state.eveningPlan.manualOrder)) state.eveningPlan.manualOrder = [];
+   if (!Array.isArray(state.eveningPlan.excludedIds)) state.eveningPlan.excludedIds = [];
+@@ -117,6 +117,9 @@ function normalizeSettingsState() {
+   if (!state.eveningPlan.naps || typeof state.eveningPlan.naps !== 'object' || Array.isArray(state.eveningPlan.naps)) {
+     state.eveningPlan.naps = {};
+   }
++  if (!state.eveningPlan.canvasAddedByDay || typeof state.eveningPlan.canvasAddedByDay !== 'object' || Array.isArray(state.eveningPlan.canvasAddedByDay)) {
++    state.eveningPlan.canvasAddedByDay = {};
++  }
+   if (!Array.isArray(state.scheduleDocs)) {
+     state.scheduleDocs = [];
+   }
+@@ -132,17 +135,38 @@ function inferTaskTypeFromTitle(title) {
+       return t.id;
+     }
+   }
++  if (TASK_TYPES.DS && /\b(ds|devoir\s+surveill[eé]|concours\s+blanc)\b/i.test(clean)) return 'DS';
+   if (TASK_TYPES.TD && /^td\b/i.test(clean)) return 'TD';
+   if (TASK_TYPES.DM && /^dm\b/i.test(clean)) return 'DM';
+   if (TASK_TYPES.Exercice && /^(exo|exercice)s?\b/i.test(clean)) return 'Exercice';
+   if (TASK_TYPES.Colle && /^(colle|kh[ôo]lle)\b/i.test(clean)) return 'Colle';
+   if (TASK_TYPES.TP && /^tp\b/i.test(clean)) return 'TP';
+-  if (TASK_TYPES.DS && /^ds\b/i.test(clean)) return 'DS';
+   if (TASK_TYPES['Révision'] && /^r[ée]vision/i.test(clean)) return 'Révision';
+   if (TASK_TYPES.Cours && /^cours\b/i.test(clean)) return 'Cours';
+   return defaultType;
+ }
+ 
++function inferSubjectFromText(text) {
++  if (!text) return null;
++  const norm = String(text).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
++  for (const s of Object.values(SUBJECTS)) {
++    const sName = String(s.name || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
++    const sShort = String(s.short || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
++    if (sName && norm.includes(sName)) return s.id;
++    if (sShort && sShort.length >= 2 && new RegExp('\\b' + sShort.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\b', 'i').test(norm)) {
++      return s.id;
++    }
++  }
++  if (/\b(math|maths|mathematiques|algebre|analyse)\b/.test(norm) && SUBJECTS.maths) return 'maths';
++  if (/\b(physique|phys|mecanique|optique|thermo|elec)\b/.test(norm) && SUBJECTS.physique) return 'physique';
++  if (/\b(chimie|orga|atomistique)\b/.test(norm) && SUBJECTS.chimie) return 'chimie';
++  if (/\b(sii|si|ingenieur|automatique|cinematique)\b/.test(norm) && SUBJECTS.sii) return 'sii';
++  if (/\b(info|informatique|python|sql|algo)\b/.test(norm) && SUBJECTS.info) return 'info';
++  if (/\b(anglais|english|lv1)\b/.test(norm) && SUBJECTS.anglais) return 'anglais';
++  if (/\b(francais|philo|philosophie|lettres|dissertation)\b/.test(norm) && SUBJECTS.francais) return 'francais';
++  return null;
++}
++
+ function buildDefaultPipelinePhases(totalDuration, phaseCount = 3) {
+   const dur = Math.max(0.5, parseFloat(totalDuration) || 2);
+   if (Number(phaseCount) === 2) {
+@@ -199,32 +223,67 @@ function getUpcomingSaturdayDsSubjects() {
+ 
+   const today = new Date();
+   today.setHours(0, 0, 0, 0);
+-  const day = today.getDay();
+-  const daysUntilSat = day === 6 ? 0 : (6 - day);
+-  const nextSat = addDays(today, daysUntilSat);
+-  const nextSatISO = formatDateISO(nextSat);
+-  const weekAfterSatISO = formatDateISO(addDays(nextSat, 7));
++  const dsRegex = /\b(ds|devoir\s+surveill[eé]|concours\s+blanc|cb)\b/i;
++
++  const specificFound = new Set();
++
++  // 1. Chercher dans les missions actives (type DS ou titre mentionnant un DS) prévues dans les 10 prochains jours
++  if (Array.isArray(state.tasks)) {
++    state.tasks.forEach(t => {
++      if (!t || t.completed || t.status === 'done') return;
++      const isDsTask = String(t.type || '').toUpperCase() === 'DS' || dsRegex.test(t.title || '');
++      if (!isDsTask) return;
++      let withinWindow = true;
++      if (t.dueDate) {
++        const due = new Date(t.dueDate + 'T00:00:00');
++        if (!isNaN(due.getTime())) {
++          const diffDays = Math.round((due - today) / 86400000);
++          withinWindow = diffDays >= 0 && diffDays <= 10;
++        }
++      }
++      if (withinWindow) {
++        const inferred = inferSubjectFromText(t.title || '');
++        const subj = (inferred && SUBJECTS[inferred]) ? inferred : t.subject;
++        if (subj && SUBJECTS[subj]) specificFound.add(subj);
++      }
++    });
++  }
+ 
+-  const found = new Set();
++  // 2. Chercher dans les créneaux d'emploi du temps datés dans les 10 prochains jours
+   if (Array.isArray(state.schedule)) {
+     state.schedule.forEach(sl => {
+-      if (!sl) return;
+-      const isDs = String(sl.type || '').toUpperCase() === 'DS' || /\bds\b/i.test(sl.title || '');
+-      if (!isDs) return;
+-      if (sl.date === nextSatISO || sl.date === weekAfterSatISO || (!sl.date && Number(sl.dayOfWeek) === 5)) {
+-        if (sl.subject && SUBJECTS[sl.subject]) found.add(sl.subject);
++      if (!sl || !sl.date) return;
++      const isDsSlot = String(sl.type || '').toUpperCase() === 'DS' || dsRegex.test(sl.title || '');
++      if (!isDsSlot) return;
++      const slDate = new Date(sl.date + 'T00:00:00');
++      if (isNaN(slDate.getTime())) return;
++      const diffDays = Math.round((slDate - today) / 86400000);
++      if (diffDays >= 0 && diffDays <= 10) {
++        const inferred = inferSubjectFromText(sl.title || '');
++        const subj = (inferred && SUBJECTS[inferred]) ? inferred : sl.subject;
++        if (subj && SUBJECTS[subj]) specificFound.add(subj);
+       }
+     });
+   }
+-  if (Array.isArray(state.tasks)) {
+-    state.tasks.forEach(t => {
+-      if (!t || t.completed || t.status === 'done') return;
+-      if (t.type === 'DS' && (t.dueDate === nextSatISO || t.dueDate === weekAfterSatISO) && t.subject && SUBJECTS[t.subject]) {
+-        found.add(t.subject);
+-      }
++
++  if (specificFound.size > 0) {
++    return Array.from(specificFound);
++  }
++
++  // 3. Repli : créneaux hebdomadaires récurrents de type DS (ex: DS du Samedi matin)
++  const recurringFound = new Set();
++  if (Array.isArray(state.schedule)) {
++    state.schedule.forEach(sl => {
++      if (!sl || sl.date) return;
++      const isDsSlot = String(sl.type || '').toUpperCase() === 'DS' || dsRegex.test(sl.title || '');
++      if (!isDsSlot) return;
++      const inferred = inferSubjectFromText(sl.title || '');
++      const subj = (inferred && SUBJECTS[inferred]) ? inferred : sl.subject;
++      if (subj && SUBJECTS[subj]) recurringFound.add(subj);
+     });
+   }
+-  return Array.from(found);
++
++  return Array.from(recurringFound);
+ }
+ 
+ function loadState() {
+diff --git a/js/utils.js b/js/utils.js
+index 38fe57f..cc6f01f 100644
+--- a/js/utils.js
++++ b/js/utils.js
+@@ -13,3 +13,6 @@ function showToast(msg) { const t = document.getElementById('toast'); document.g
+ 
+ function escapeHtml(str) { if (!str) return ''; return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
+ 
++function uid() {
++  return Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 7);
++}

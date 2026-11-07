@@ -78,6 +78,7 @@ window.closeAnyOpenModal = function() {
     ['portal-modal', () => window.closePortalModal && window.closePortalModal()],
     ['subject-modal', () => window.closeSubjectModal && window.closeSubjectModal()],
     ['tasktype-modal', () => window.closeTaskTypeModal && window.closeTaskTypeModal()],
+    ['anki-modal', () => window.closeAnkiModal && window.closeAnkiModal()],
     ['onboarding-modal', () => window.skipOnboarding && window.skipOnboarding()]
   ];
   for (const [id, fn] of modalClosers) {
@@ -161,10 +162,10 @@ window.switchTab = function(tabId) {
   document.body.dataset.tab = tabId;
   const headers = {
     cahier: ['Missions & Cahier de Texte', 'Priorisation automatique selon le type de devoir, la date et la durée'],
-    agenda: ['Emploi du temps & Planning Soirée', 'Grille des cours de la semaine et programme d\'étude du soir'],
+    agenda: ['Emploi du temps & After-Hours Engine', 'Grille des cours de la semaine et optimiseur intelligent de créneaux (Cours → TD → DM)'],
     postits: ['Mur d\'Erreurs & Pièges Classiques', 'Post-its interactifs à relire avant chaque DS ou colle'],
-    dailydrop: ['Daily Drop · Anglais & Culture G', 'Mot du jour, erreurs classiques à éviter en anglais, Culture G et presse'],
-    sites: ['Portails, Données & Réglages', 'Horaires du soir, matières, coefficients et sauvegarde Cloud']
+    dailydrop: ['Daily Drop · Anglais & Culture G', 'Mot du jour, erreurs classiques à éviter en anglais, Culture G et export AnkiConnect'],
+    sites: ['Portails, Données & Réglages', 'After-Hours Engine, AnkiConnect, matières, coefficients et sauvegarde Cloud']
   };
   document.getElementById('view-title').textContent = headers[tabId][0];
   document.getElementById('view-subtitle').textContent = headers[tabId][1];
