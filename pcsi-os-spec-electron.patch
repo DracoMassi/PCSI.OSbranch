@@ -1,0 +1,203 @@
+From d061be56cf8e87aedfbf4e64100dc9a91cafd75b Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Sun, 8 Nov 2026 11:22:49 +0000
+Subject: [PATCH] =?UTF-8?q?docs:=20sp=C3=A9cification=20de=20l'application?=
+ =?UTF-8?q?=20de=20bureau=20Electron=20(overlay=20widget/HUD,=20=C3=AEle?=
+ =?UTF-8?q?=20dynamique,=20saisie=20Anki)?=
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+---
+ .../2026-11-08-electron-overlay-design.md     | 179 ++++++++++++++++++
+ 1 file changed, 179 insertions(+)
+ create mode 100644 docs/superpowers/specs/2026-11-08-electron-overlay-design.md
+
+diff --git a/docs/superpowers/specs/2026-11-08-electron-overlay-design.md b/docs/superpowers/specs/2026-11-08-electron-overlay-design.md
+new file mode 100644
+index 0000000..c617f76
+--- /dev/null
++++ b/docs/superpowers/specs/2026-11-08-electron-overlay-design.md
+@@ -0,0 +1,179 @@
++# PCSI.OS : application de bureau Electron avec mode overlay
++
++Date : 2026-11-08 · Statut : conception validée en conversation, en attente de relecture · Dépôt : `PCSI.OSbranch`
++
++## 1. Objectif
++
++Livrer PCSI.OS comme application de bureau (Windows et Linux) avec trois modes :
++
++1. **Plein écran** : l'appli actuelle, inchangée.
++2. **Widget** : petite fenêtre flottante, transparente, toujours au-dessus, interactive.
++3. **HUD** : fenêtre plein écran transparente qui laisse passer les clics, avec une « île dynamique » en haut et un panneau de saisie rapide pour ajouter une carte Anki.
++
++Le site web reste déployable sur Vercel sans changement de comportement.
++
++### Hors périmètre (version 1)
++
++macOS ; mise à jour automatique ; signature de code ; raccourcis clavier personnalisables ; lancement au démarrage ; notifications ; choix de l'écran du HUD ; saisie libre dans le HUD (seul le panneau de saisie rapide capture le clavier) ; refonte de la fiabilité des clés IA de `api/ai-schedule.js` (sujet distinct).
++
++## 2. Contraintes établies (sources : documentation Electron, rapports de développeurs)
++
++| Constat | Conséquence de conception |
++|---|---|
++| Les fenêtres transparentes ne sont pas redimensionnables | Widget en tailles prédéfinies, changées par recréation |
++| La transparence se fixe à la création (à ma connaissance) et des rapports indiquent qu'une fenêtre transparente cachée puis réaffichée peut la perdre, y compris sous Linux | Une seule fenêtre, recréée à chaque changement de mode |
++| Les DevTools ouverts désactivent la transparence | En développement, DevTools détachés uniquement en plein écran |
++| Le renvoi des mouvements de souris à travers une fenêtre « clics ignorés » n'existe que sous Windows et macOS | HUD interactif sous Windows, lecture seule sous Linux |
++| Raccourcis globaux peu fiables sous Wayland (rapports pour Ubuntu/Kubuntu) | Commandes `pcsi-os --…` liées à des raccourcis système sous Linux |
++| Un rapport (Electron 17) signale un « toujours au-dessus » défaillant sous Ubuntu | À tester ; liste de contrôle |
++| `fetch()` sur `file://` est bloqué par Chromium (à ma connaissance) | Protocole personnalisé `app://pcsi` |
++| `localStorage` d'Electron ≠ celui du navigateur | Premier lancement : Sync ID ou import JSON |
++
++## 3. Architecture
++
++### 3.1 Organisation du dépôt
++
++```
++desktop/
++  package.json            electron, electron-builder
++  config.json             { "apiBase": "" }  (URL du site Vercel ; vide = pas d'appel serveur IA)
++  src/main.js             cycle de vie, fenêtre unique, verrou d'instance, protocole app://
++  src/modes.js            fonction pure : (mode, plateforme, écran, préférences) -> options de fenêtre
++  src/cli.js              fonction pure : analyse des arguments (--mode, --toggle, --next-mode, --quick-add, --toggle-island, --quit, --no-transparency)
++  src/anki.js             pont AnkiConnect (liste blanche, délai 3 s)
++  src/preload.js          contextBridge : API minimale (3.4)
++  scripts/build-web.js    copie le site dans desktop/web/ et télécharge les ressources CDN
++  web/                    généré, ignoré par git
++  TESTING.md              liste de contrôle manuelle
++.vercelignore             + desktop/
++```
++
++Le site est copié, jamais modifié par le script. Les balises `<script>`/`<link>` des CDN (Tailwind, Phosphor, QR, polices) sont réécrites vers des fichiers locaux dans la copie.
++
++### 3.2 Processus et sécurité
++
++- `contextIsolation: true`, `nodeIntegration: false`, `sandbox: true`.
++- Protocole `app://pcsi/` enregistré par `protocol.handle`, servant `desktop/web/` ; origine stable pour `localStorage`.
++- `app.requestSingleInstanceLock()` ; un second lancement transmet ses arguments à l'instance en cours (événement `second-instance`) et quitte.
++
++### 3.3 Fenêtre unique recréée par mode
++
++Séquence de `setMode(nouveau)` :
++
++1. Le processus principal demande à la page de sauvegarder son état et attend un accusé (500 ms maximum).
++2. Il crée la nouvelle fenêtre cachée (`show: false`) avec `modes.js`, charge `app://pcsi/index.html?mode=<mode>`.
++3. À `ready-to-show`, il affiche la nouvelle fenêtre puis détruit l'ancienne.
++4. Le mode est mémorisé dans `userData/desktop-state.json` et rouvert au lancement suivant.
++
++Aucun transfert de données : toutes les fenêtres lisent le même `localStorage`. Il n'existe jamais deux fenêtres actives en écriture.
++
++### 3.4 API du `preload` (`window.pcsiDesktop`)
++
++`platform` · `getMode()` · `setMode(mode)` · `onModeChange(cb)` · `setInteractive(bool)` (HUD Windows : bascule des clics selon la zone survolée) · `onQuickAdd(cb)` · `ankiInvoke(action, params)` · `quit()`. Rien d'autre n'est exposé.
++
++## 4. Les trois modes
++
++| | Plein écran | Widget | HUD |
++|---|---|---|---|
++| Fenêtre | opaque, cadre, maximisée, fond `#090A0F` | transparente, sans cadre, taille fixe (petit/moyen/grand), ombre désactivée | transparente, sans cadre, taille de l'écran principal |
++| Au-dessus | non | oui (activé après création) | oui (activé après création) |
++| Barre des tâches | oui | non | non |
++| Clics | normaux | normaux | traversent (`setIgnoreMouseEvents`) |
++| Windows | comme aujourd'hui | interactif | interactif : `forward` activé, la page appelle `setInteractive(true)` sur les zones interactives (île, panneaux, mini-barre) et `false` ailleurs |
++| Linux | comme aujourd'hui | interactif | lecture seule ; clics ignorés sans `forward` |
++
++Détails :
++
++- **Widget** : poignée de déplacement en CSS (`-webkit-app-region: drag`) ; position mémorisée ; à 360 px de large le CSS existant bascule sur sa mise en page étroite (points de rupture 640/768 px).
++- **HUD** : contenu = navigation et onglet actif en panneaux de verre translucides ancrés en haut à droite, hauteur adaptée ; île en haut au centre ; le reste vide et traversable. Écran principal uniquement.
++- **Repli sans transparence** : option `--no-transparency` et entrée du menu de l'icône système : fond sombre opaque, même mise en page.
++
++## 5. Pilotage
++
++- **Icône système** : Plein écran · Widget (petit, moyen, grand) · HUD · Saisie rapide · Fond opaque · Quitter. Sous GNOME, dépend du support des indicateurs d'applications (à vérifier).
++- **Raccourcis globaux** : `Ctrl+Alt+P` (afficher/masquer l'overlay : widget ou HUD, selon le dernier utilisé), `Ctrl+Alt+M` (mode suivant : plein écran → widget → HUD → plein écran, le widget reprenant sa dernière taille), `Ctrl+Alt+A` (saisie rapide), `Ctrl+Alt+I` (ouvrir/replier l'île).
++  - Windows : `globalShortcut.register`.
++  - Linux : tentative d'enregistrement ; en cas d'échec, l'icône système l'indique. Voie fiable : commandes `pcsi-os --toggle`, `--next-mode`, `--mode=<mode>`, `--quick-add`, `--toggle-island`, `--quit`, que l'utilisateur lie à des raccourcis dans les réglages du système.
++- **Sortie de secours** : le HUD ne se lance que si au moins une voie de sortie existe (icône système créée ou un raccourci enregistré). Sinon l'appli reste en widget et affiche la raison. `pcsi-os --mode=fullscreen` fonctionne toujours.
++- **Interface** : petit bouton de changement de mode en plein écran et en widget ; mini-barre dans un coin du HUD sous Windows.
++- **Fermeture** : en plein écran, fermer la fenêtre quitte l'appli ; widget et HUD se quittent par l'icône système ou `--quit`.
++
++## 6. Changements dans l'appli web
++
++1. **Mode dans le CSS** : un script en tête de `index.html` pose `data-mode` (lu dans `?mode=`) avant le premier rendu. Blocs `html[data-mode="widget"]` et `html[data-mode="hud"]` dans `css/overrides.css` : fond transparent, surfaces vitrées. Le plein écran n'est pas modifié.
++2. **Cadre qui coulisse (« nav glide »)** : composant JS vanilla sur tout conteneur ayant des `.nav-item` (`.v3-segmented-nav` et la barre mobile du bas). Un unique élément lumineux se déplace (position et largeur, `cubic-bezier(0.16, 1, 0.3, 1)`) vers l'élément survolé, ou ayant le focus clavier, ou devenant actif (`switchTab`) ; il revient sur `.nav-item.active` quand la souris quitte la barre. Actif en widget et HUD uniquement. En HUD Linux il reste fixe sur la page active. `prefers-reduced-motion` : déplacement instantané. Nouveau token `--accent-info: #38BDF8` dans `css/base.css`, avec une lueur autour du cadre.
++3. **Réseau et IA** : `fetch('/api/ai-schedule')` (`js/data.js`) passe par une constante `API_BASE` (vide sur le web, fournie par le `preload` depuis `config.json` dans Electron). Dans Electron, si `apiBase` est vide, `API_BASE` vaut `null` et l'appel au serveur est ignoré : le code retombe sur son chemin existant sans serveur (clé personnelle ou message d'erreur actuel). La fonction Vercel autorise l'origine `app://pcsi` via sa variable `ALLOWED_ORIGIN`. L'en-tête `Origin` réellement envoyé par Chromium pour ce protocole est vérifié au premier test.
++4. **Hors ligne** : ressources CDN embarquées par `build-web.js` (polices sous licence libre).
++5. **Données** : première exécution = Sync ID (Supabase) ou import JSON existants.
++
++## 7. Saisie rapide Anki
++
++- Déclenchée par `Ctrl+Alt+A`, `--quick-add` ou le menu de l'icône. Disponible dans les trois modes.
++- Panneau compact : mot (recto), traduction (verso), paquet (par défaut `state.settings.ankiDeck`, sinon `PCSI::Vocabulaire`). `Entrée` ajoute, `Échap` ferme.
++- **Mode capture** en HUD : à l'ouverture la fenêtre cesse d'ignorer les clics, devient focalisable et prend le focus ; à la fermeture elle redevient traversable et rend le focus. Fonctionne sous Linux sans `forward`.
++- **Refactor** dans `js/daily_drop.js` : extraire de `submitAnkiCard` une fonction `addAnkiCard(front, back, deck)` (l'échappement HTML et la conversion des retours à la ligne y restent) ; la fenêtre actuelle et le panneau rapide l'appellent toutes deux.
++- **Pont AnkiConnect** : si `window.pcsiDesktop` existe, `invokeAnkiConnect` appelle `pcsiDesktop.ankiInvoke`, qui exécute côté processus principal un `POST http://127.0.0.1:8765` (`version: 6`) sans CORS, avec un délai de 3 s ; sinon le comportement actuel est conservé. Liste blanche = les actions effectivement appelées par `invokeAnkiConnect` dans `daily_drop.js`, relevées à l'implémentation ; toute autre action est refusée.
++- Anki ou le greffon absent : message dans le panneau et repli existant (`copyAnkiCardFallback`).
++
++## 8. Île dynamique (HUD uniquement)
++
++- **Repliée** : pilule centrée en haut, une information courte (module choisi). **Étendue** : carte aux coins moins arrondis, contenu en fondu ; animation de la taille avec la courbe du cadre ; `prefers-reduced-motion` : sans animation.
++- **Windows** : survol de la pilule → `setInteractive(true)` et expansion ; sortie → repli après 250 ms (anti-clignotement) et `setInteractive(false)`. La zone interactive suit la taille de l'île.
++- **Linux** : pas de survol (HUD en lecture seule) ; ouverture par `Ctrl+Alt+I` / `pcsi-os --toggle-island` et ouverture automatique temporaire.
++- **Modules** (registre extensible ; chacun fournit un texte replié et une vue étendue ; un module sans donnée se masque) :
++
++| Id | Contenu | Source |
++|---|---|---|
++| `next-class` | prochain cours : heure, matière, salle | `state.schedule` |
++| `missions-due` | missions du jour et échéances dans N jours, ordre de tension existant | `state.tasks` (`dueDate`) |
++| `evening` | créneaux de la soirée | `state.eveningPlan` |
++| `clock` | heure et date | horloge |
++| `countdown` | compte à rebours vers une mission choisie | `dueDate` de la mission |
++
++- **Réglages** (`state.settings.island`, dans « Portails & Réglages », synchronisés ; aucun secret) :
++
++```json
++"island": {
++  "trigger": "hover",
++  "collapsed": "next-class",
++  "expanded": ["next-class", "missions-due", "clock"],
++  "autoOpenMinutesBeforeClass": 10,
++  "dueWithinDays": 3,
++  "countdownTaskId": null
++}
++```
++
++  `trigger` vaut `"hover"` par défaut sous Windows et `"shortcut"` sous Linux (valeur imposée). `autoOpenMinutesBeforeClass: 0` désactive l'ouverture automatique. L'ordre de `expanded` est modifiable (boutons haut/bas) ; chaque module se coche/décoche.
++- Rafraîchissement toutes les 30 s tant que l'île est visible.
++
++## 9. Distribution (0 €)
++
++- `electron-builder` : installeur Windows (`.exe`), Linux `.deb` (priorité pour Ubuntu) et AppImage (nécessite probablement `libfuse2` sur les Ubuntu récents ; à vérifier).
++- GitHub Actions : un exécuteur Windows et un Linux, déclenchés par une étiquette de version, publication dans les Releases. Dépôt public, donc gratuit à ma connaissance.
++- Pas de signature de code : sous Windows, écran « Windows a protégé votre PC » (Informations complémentaires → Exécuter quand même), documenté dans le README.
++
++## 10. Tests
++
++- **Automatiques** (`node --test`, aucune dépendance) : `modes.js` (options par mode et plateforme), `cli.js` (arguments), liste blanche Anki, sélection des modules de l'île à partir d'un état et d'une heure fixés, calcul de position du cadre si extrait en fonction pure.
++- **Démarrage** : test de fumée sous `xvfb` (l'appli se lance et charge `app://pcsi/index.html`).
++- **Manuels** (`desktop/TESTING.md`, à dérouler sur Windows et Linux, résultat attendu par ligne) : transparence, « toujours au-dessus », passage des clics, survol de l'île (Windows), focus du panneau de saisie rapide (en particulier Wayland), icône système, persistance du mode après changement, repli `--no-transparency`, `Origin` envoyé à la fonction Vercel.
++
++## 11. Risques et points à vérifier au premier prototype
++
++1. Focus clavier du panneau de saisie sous Wayland (une commande externe peut ne pas obtenir le focus) ; repli : saisie rapide sur le widget.
++2. Transparence et « toujours au-dessus » sous Linux selon l'environnement graphique ; repli `--no-transparency`.
++3. `Origin` envoyé pour `app://pcsi` et acceptation par `ALLOWED_ORIGIN`.
++4. Icône système sous GNOME.
++5. Comportement de l'AppImage sans `libfuse2`.
++
++## 12. Ordre de réalisation
++
++1. Coquille Electron, `app://`, build hors ligne, plein écran fonctionnel.
++2. Changement de mode par recréation, icône système, commandes.
++3. Widget et cadre qui coulisse.
++4. HUD, passage des clics, zones interactives.
++5. Panneau de saisie rapide et pont Anki.
++6. Île dynamique et ses réglages.
++7. Packaging par GitHub Actions.
++
++Chaque étape produit une version utilisable.
+-- 
+2.43.0
+
